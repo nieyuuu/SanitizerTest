@@ -168,7 +168,7 @@ namespace Analyzer
 			UE_LOG(LogAssetSanitizer, Error, TEXT("Detected %d different quantization exponents in %d registries. It is expected all registries have same quantization exponent."), UniqueExponentSet.Num(), InRegistries.Num());
 			for (const FPreprocessRegistry* Registry : InRegistries)
 			{
-				UE_LOG(LogAssetSanitizer, Error, TEXT("Registry file name: [%s], exponent: [%d].", *(Registry->GetFileName().ToString()), Registry->GetQuantizationExponent()));
+				UE_LOG(LogAssetSanitizer, Error, TEXT("Registry file name: [%s], exponent: [%d]."), *(Registry->GetFileName().ToString()), Registry->GetQuantizationExponent());
 			}
 			return false;
 		}
