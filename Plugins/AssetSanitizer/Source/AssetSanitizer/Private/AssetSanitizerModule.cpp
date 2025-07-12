@@ -1,15 +1,16 @@
-#include "AssetSanitiserModule.h"
+#include "AssetSanitizerModule.h"
+
 #include "TestCode.h"
 
-#define LOCTEXT_NAMESPACE "FAssetSanitiserModule"
+#define LOCTEXT_NAMESPACE "FAssetSanitizerModule"
 
-void FAssetSanitiserModule::StartupModule()
+void FAssetSanitizerModule::StartupModule()
 {
 	// This code will execute after your module is loaded into memory; the exact timing is specified in the .uplugin file per-module
-	GetAllStaticMeshes();
+	//TestStaticMeshSimilarityAnalyzer();
 }
 
-void FAssetSanitiserModule::ShutdownModule()
+void FAssetSanitizerModule::ShutdownModule()
 {
 	// This function may be called during shutdown to clean up your module.  For modules that support dynamic reloading,
 	// we call this function before unloading the module.
@@ -17,4 +18,4 @@ void FAssetSanitiserModule::ShutdownModule()
 
 #undef LOCTEXT_NAMESPACE
 
-IMPLEMENT_MODULE(FAssetSanitiserModule, AssetSanitiser)
+IMPLEMENT_MODULE(FAssetSanitizerModule, AssetSanitizer)

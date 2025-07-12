@@ -1,0 +1,13 @@
+"[EngineDir]/UE_5.6/Engine/Binaries/Win64/UnrealEditor-Cmd.exe" "[ProjectDir]/MyProject.uproject" -NoShaderCompile -Run=MeshSimilarityAnalyze -Mode=Balancer -NumOfBatches=2 -ConsiderDiskSize -DirsToProcess="D:/DirsToProcess.txt" -OutputDir="D:/Test/"
+
+"[EngineDir]/UE_5.6/Engine/Binaries/Win64/UnrealEditor-Cmd.exe" "[ProjectDir]/MyProject.uproject" -NoShaderCompile -Run=MeshSimilarityAnalyze -Mode=Preprocessor -QuantizationExponent=5 -InputFile="D:/Test/Batch0.txt"
+
+"[EngineDir]/UE_5.6/Engine/Binaries/Win64/UnrealEditor-Cmd.exe" "[ProjectDir]/MyProject.uproject" -NoShaderCompile -Run=MeshSimilarityAnalyze -Mode=Analyzer -AnalyzerType=XxHash128 -RegistryStorage="D:/Test/"
+
+### Additional Command Line Switches ###
+-NoShaderCompile: Disable shader compiling when running commandlet
+
+### Contents in DirsToProcess.txt (Replace "Content" to "Game") ###
+/Game/SomeFolder1
+/Game/SomeFolder2/SomeFolder3
+/Game/SomeFolder4

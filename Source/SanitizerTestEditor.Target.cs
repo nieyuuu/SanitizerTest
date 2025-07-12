@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 public class SanitizerTestEditorTarget : TargetRules
 {
-	public SanitizerTestEditorTarget( TargetInfo Target) : base(Target)
+	public SanitizerTestEditorTarget(TargetInfo Target) : base(Target)
 	{
 		Type = TargetType.Editor;
 		DefaultBuildSettings = BuildSettingsVersion.V5;

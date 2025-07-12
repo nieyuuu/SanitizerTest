@@ -2,7 +2,7 @@
 
 #include "Modules/ModuleManager.h"
 
-class FAssetSanitiserModule : public IModuleInterface
+class FAssetSanitizerModule : public IModuleInterface
 {
 public:
 
