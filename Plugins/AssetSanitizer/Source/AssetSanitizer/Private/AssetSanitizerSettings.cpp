@@ -1,11 +1,10 @@
 #include "AssetSanitizerSettings.h"
 
 #if WITH_EDITOR
-void UAssetSanitizerSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+void UAssetSanitizerSettings::PostEditChangeProperty(FPropertyChangedEvent& InPropertyChangedEvent)
 {
-	Super::PostEditChangeProperty(PropertyChangedEvent);
+	Super::PostEditChangeProperty(InPropertyChangedEvent);
 	
 	SaveConfig();
 }
 #endif
-

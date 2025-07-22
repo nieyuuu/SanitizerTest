@@ -5,9 +5,65 @@
 #include "CoreMinimal.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 
-constexpr int32 MIN_EXPONENT = -2; //Meters
-constexpr int32 MAX_EXPONENT = 7;
-constexpr int32 DEFAULT_EXPONENT = 0; //Centimeters
+constexpr int32 MIN_EXPONENT	 = -2; //1*10^2cm
+constexpr int32 MAX_EXPONENT	 = 7;  //1*10^-7cm
+constexpr int32 DEFAULT_EXPONENT = 0;  //1*10^0cm
+
+constexpr int32 MIN_NUM_OF_BATCHES = 1;
+
+struct FPreprocessBalancer
+{
+public:
+	static TArray<TArray<FString>> BalanceStaticMeshes(const TArray<FString>& InDirsToProcess, int32 InNumOfBatches = MIN_NUM_OF_BATCHES);
+	static TArray<TArray<FString>> BalanceStaticMeshesBasedOnDiskSize(const TArray<FString>& InDirsToProcess, int32 InNumOfBatches = MIN_NUM_OF_BATCHES);
+
+private:
+	template<typename WeightCalculatorType>
+	static TArray<TArray<FString>> BalanceStaticMeshesImp(const TArray<FString>& InDirsToProcess, int32 InNumOfBatches);
+};
+
+template<typename WeightCalculatorType>
+inline TArray<TArray<FString>> FPreprocessBalancer::BalanceStaticMeshesImp(const TArray<FString>& InDirsToProcess, int32 InNumOfBatches)
+{
+	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(AssetRegistryConstants::ModuleName);
+	IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
+	AssetRegistry.SearchAllAssets(true/* bSynchronousSearch */);
+
+	FARFilter Filter;
+	Filter.ClassPaths.Add(UStaticMesh::StaticClass()->GetClassPathName());
+	Filter.PackagePaths.Append(InDirsToProcess);
+	Filter.bRecursivePaths = true;
+	Filter.bIncludeOnlyOnDiskAssets = true;
+
+	TArray<FAssetData> StaticMeshAssetDatas;
+	AssetRegistry.GetAssets(Filter, StaticMeshAssetDatas);
+
+	if (StaticMeshAssetDatas.Num() == 0)
+	{
+		return TArray<TArray<FString>>();
+	}
+
+	int32 ActualNumOfBatches = FMath::Max(InNumOfBatches, MIN_NUM_OF_BATCHES);
+	ActualNumOfBatches = ActualNumOfBatches > StaticMeshAssetDatas.Num() ? StaticMeshAssetDatas.Num() : ActualNumOfBatches;
+
+	TArray<double> WeightSums;
+	TArray<TArray<FString>> BalancedBatches;
+
+	WeightSums.AddDefaulted(ActualNumOfBatches);
+	BalancedBatches.AddDefaulted(ActualNumOfBatches);
+
+	WeightCalculatorType WeightCalculator{};
+
+	for (int i = 0; i < StaticMeshAssetDatas.Num(); ++i)
+	{
+		int32 MinWeightIndex = WeightSums.Find(*Algo::MinElement(WeightSums));
+
+		BalancedBatches[MinWeightIndex].Add(StaticMeshAssetDatas[i].GetObjectPathString());
+		WeightSums[MinWeightIndex] += WeightCalculator(StaticMeshAssetDatas[i]);
+	}
+
+	return MoveTemp(BalancedBatches);
+}
 
 UENUM()
 enum class EPreprocessStatus :uint8
@@ -19,6 +75,8 @@ enum class EPreprocessStatus :uint8
 	MeshDescriptionNotFound,
 	PositionBufferContainsNaN
 };
+
+FString PreprocessStatusToString(EPreprocessStatus InStatus);
 
 //Settings defining the behaviors when preprocessing static meshes.
 struct FPreprocessSettings
@@ -318,73 +376,6 @@ namespace StaticMeshPreprocessing
 		//Allocate an instance of FQuantizedStaticMesh and add it to ProcessedStaticMeshes
 		FQuantizedStaticMesh* AllocateAndAddToThisRegistry(const FString& InStaticMeshObjectPath);
 	};
-}
-
-constexpr int32 MIN_NUM_OF_BATCHES = 1;
-
-struct FDefaultWeightCalculator
-{
-	double operator()(const FAssetData& InAssetData);
-};
-
-struct FDiskSizeWeightCalculator
-{
-	double operator()(const FAssetData& InAssetData);
-};
-
-struct FPreprocessBalancer
-{
-public:
-	static TArray<TArray<FString>> BalanceStaticMeshes(const TArray<FString>& InDirsToProcess, int32 InNumOfBatches = MIN_NUM_OF_BATCHES);
-	static TArray<TArray<FString>> BalanceStaticMeshesBasedOnDiskSize(const TArray<FString>& InDirsToProcess, int32 InNumOfBatches = MIN_NUM_OF_BATCHES);
-
-private:
-	template<typename WeightCalculatorType>
-	static TArray<TArray<FString>> BalanceStaticMeshesImp(const TArray<FString>& InDirsToProcess, int32 InNumOfBatches);
-};
-
-template<typename WeightCalculatorType>
-inline TArray<TArray<FString>> FPreprocessBalancer::BalanceStaticMeshesImp(const TArray<FString>& InDirsToProcess, int32 InNumOfBatches)
-{
-	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(AssetRegistryConstants::ModuleName);
-	IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
-	AssetRegistry.SearchAllAssets(true/* bSynchronousSearch */);
-
-	FARFilter Filter;
-	Filter.ClassPaths.Add(UStaticMesh::StaticClass()->GetClassPathName());
-	Filter.PackagePaths.Append(InDirsToProcess);
-	Filter.bRecursivePaths = true;
-	Filter.bIncludeOnlyOnDiskAssets = true;
-
-	TArray<FAssetData> StaticMeshAssetDatas;
-	AssetRegistry.GetAssets(Filter, StaticMeshAssetDatas);
-
-	if (StaticMeshAssetDatas.Num() == 0)
-	{
-		UE_LOG(LogAssetSanitizer, Warning, TEXT("Empty static mesh asset datas."));
-		return TArray<TArray<FString>>();
-	}
-
-	int32 ActualNumOfBatches = FMath::Max(InNumOfBatches, MIN_NUM_OF_BATCHES);
-	ActualNumOfBatches = ActualNumOfBatches > StaticMeshAssetDatas.Num() ? StaticMeshAssetDatas.Num() : ActualNumOfBatches;
-
-	TArray<double> WeightSums;
-	TArray<TArray<FString>> BalancedBatches;
-	
-	WeightSums.AddDefaulted(ActualNumOfBatches);
-	BalancedBatches.AddDefaulted(ActualNumOfBatches);
-
-	WeightCalculatorType WeightCalculator{};
-
-	for (int i = 0; i < StaticMeshAssetDatas.Num(); ++i)
-	{
-		int32 MinWeightIndex = WeightSums.Find(*Algo::MinElement(WeightSums));
-
-		BalancedBatches[MinWeightIndex].Add(StaticMeshAssetDatas[i].GetObjectPathString());
-		WeightSums[MinWeightIndex] += WeightCalculator(StaticMeshAssetDatas[i]);
-	}
-
-	return MoveTemp(BalancedBatches);
 }
 
 typedef StaticMeshPreprocessing::FQuantizedVector     FPreprocessedPosition;

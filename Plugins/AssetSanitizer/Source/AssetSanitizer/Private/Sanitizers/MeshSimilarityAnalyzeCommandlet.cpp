@@ -1,5 +1,7 @@
 #include "MeshSimilarityAnalyzeCommandlet.h"
 
+#include "MeshSimilarityAnalyzer.h"
+
 #include "AssetCompilingManager.h"
 
 DEFINE_LOG_CATEGORY(LogMeshSimilarityAnalyzeCommandlet);
@@ -20,11 +22,11 @@ DEFINE_LOG_CATEGORY(LogMeshSimilarityAnalyzeCommandlet);
 #define ANALYZER_TYPE    TEXT("AnalyzerType")
 #define REGISTRY_STORAGE TEXT("RegistryStorage")
 
-int32 UMeshSimilarityAnalyzeCommandlet::Main(const FString& CmdLineParams)
+int32 UMeshSimilarityAnalyzeCommandlet::Main(const FString& InCmdLineParams)
 {
 	TArray<FString> Tokens, Switches;
 	TMap<FString, FString> Arguments;
-	ParseCommandLine(*CmdLineParams, Tokens, Switches, Arguments);
+	ParseCommandLine(*InCmdLineParams, Tokens, Switches, Arguments);
 
 	if (!Arguments.Contains(MODE) || Arguments[MODE].Len() == 0)
 	{
@@ -261,50 +263,13 @@ int32 UMeshSimilarityAnalyzeCommandlet::RunAnalyzerMode(EAnalyzerType InAnalyzer
 		RegistryStorage.Add(MoveTemp(Registry));
 	}
 
-	TSet<FPreprocessRegistry*> Registries;
+	TArray<FPreprocessRegistry*> Registries;
 	Algo::Transform(RegistryStorage, Registries, [](const TUniquePtr<FPreprocessRegistry>& InRegistry) {
 		return InRegistry.Get();
 	});
 
-	IMeshSimilarityAnalyzer* MeshSimilarityAnalyzer = nullptr;
-
-	switch (InAnalyzerType)
-	{
-	case EAnalyzerType::PerVertex:
-		MeshSimilarityAnalyzer = new FPerVertexAnalyzer();
-		break;
-	case EAnalyzerType::XxHash64:
-		MeshSimilarityAnalyzer = new FXxHash64Analyzer();
-		break;
-	case EAnalyzerType::XxHash128:
-		MeshSimilarityAnalyzer = new FXxHash128Analyzer();
-		break;
-	default:
-		check(0)
-		break;
-	}
-
-	struct FScopeGuard
-	{
-		FScopeGuard(IMeshSimilarityAnalyzer* InMeshSimilarityAnalyzer)
-		{
-			MeshSimilarityAnalyzer = InMeshSimilarityAnalyzer;
-		}
-		~FScopeGuard()
-		{
-			if (MeshSimilarityAnalyzer)
-			{
-				delete MeshSimilarityAnalyzer;
-			}
-		}
-
-		IMeshSimilarityAnalyzer* MeshSimilarityAnalyzer;
-	};
-
-	FScopeGuard Guard(MeshSimilarityAnalyzer);
-
 	FAnalyzeResults Results;
-	if (!MeshSimilarityAnalyzer->Analyzes(Registries, Results))
+	if (!AnalyzeMeshSimilarity(InAnalyzerType, Registries, Results))
 	{
 		UE_LOG(LogMeshSimilarityAnalyzeCommandlet, Error, TEXT("Failed to analyze mesh similarity"));
 		return -1;

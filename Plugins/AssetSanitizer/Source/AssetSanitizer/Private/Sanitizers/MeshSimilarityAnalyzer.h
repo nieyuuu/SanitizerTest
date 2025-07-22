@@ -16,6 +16,8 @@ enum class EAnalyzerType :uint8
 	XxHash128
 };
 
+FString AnalyzerTypeToString(EAnalyzerType InType);
+
 USTRUCT()
 struct FSimilarGroup
 {
@@ -57,12 +59,12 @@ namespace Analyzer
 		IMeshSimilarityAnalyzer() = default;
 		virtual ~IMeshSimilarityAnalyzer() = default;
 
-		bool Analyzes(const TSet<FPreprocessRegistry*>& InRegistries, FAnalyzeResults& OutResults)const;
+		bool Analyzes(const TArray<FPreprocessRegistry*>& InRegistries, FAnalyzeResults& OutResults)const;
 
 	protected:
 		//Checks all registries' QuantizationExponent are equal and elements in all registries are unique.
 		//Classify static meshes by their vertex counts and filter those which have only one static mesh.
-		bool ClassifyStaticMeshes(const TSet<FPreprocessRegistry*>& InRegistries, TMap<int32, TArray<const FPreprocessedStaticMesh*>>& OutClassifiedStaticMeshes)const;
+		bool ClassifyStaticMeshes(const TArray<FPreprocessRegistry*>& InRegistries, TMap<int32, TArray<const FPreprocessedStaticMesh*>>& OutClassifiedStaticMeshes)const;
 
 		//Analyze a subset of the classified static meshes which have same number of vertices.
 		virtual void AnalyzesSubset(const TArray<const FPreprocessedStaticMesh*>& InStaticMeshSubset, TArray<TArray<const FPreprocessedStaticMesh*>>& OutResults)const = 0;
@@ -86,10 +88,16 @@ namespace Analyzer
 		{
 			int32 Exponent = DEFAULT_EXPONENT;
 			int32 NumOfVertices = 0;
-			FHashType Hash{};
+			FHashType Hash;
 
-			TKey<FHashType>() {}
-			TKey<FHashType>(int32 InExponent, int32 InNumOfVertices, FHashType InHash) :Exponent(InExponent), NumOfVertices(InNumOfVertices), Hash(InHash) {}
+			static TKey<FHashType> Construct(int32 InExponent, int32 InNumOfVertices, FHashType InHash)
+			{
+				TKey<FHashType> Result;
+				Result.Exponent = InExponent;
+				Result.NumOfVertices = InNumOfVertices;
+				Result.Hash = InHash;
+				return Result;
+			}
 
 			inline bool operator==(const TKey<FHashType>& InOther) const
 			{
@@ -117,7 +125,7 @@ namespace Analyzer
 		inline TKey<FHashType> MakeKey(int32 InExponent, int32 InNumOfVertex, const void* InRawData)
 		{
 			FHashType Hash = FHashType::HashBuffer(InRawData, InNumOfVertex * sizeof(FPreprocessedPosition));
-			return TKey<FHashType>(InExponent, InNumOfVertex, Hash);
+			return TKey<FHashType>::Construct(InExponent, InNumOfVertex, Hash);
 		}
 
 		template<typename FHashType>
@@ -163,7 +171,7 @@ namespace Analyzer
 				TEXT("ParallelMemoryHashStaticMeshes"),
 				Contexts,
 				InStaticMeshSubset.Num(),
-				512,
+				256,
 				MoveTemp(LoopBody),
 				EParallelForFlags::None
 			);
@@ -210,6 +218,8 @@ namespace Analyzer
 		}
 	};
 }
+
+bool AnalyzeMeshSimilarity(EAnalyzerType InAnalyzerType, const TArray<FPreprocessRegistry*>& InRegistries, FAnalyzeResults& OutResults);
 
 typedef Analyzer::IMeshSimilarityAnalyzer		  IMeshSimilarityAnalyzer;
 typedef Analyzer::FPerVertexAnalyzer			  FPerVertexAnalyzer;

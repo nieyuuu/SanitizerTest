@@ -2,11 +2,21 @@
 
 #include "Modules/ModuleManager.h"
 
-class FAssetSanitizerModule : public IModuleInterface
+class UContentBrowserAssetContextMenuContext;
+class UContentBrowserFolderContext;
+
+class FAssetSanitizerModule :public IModuleInterface
 {
 public:
-
-	/** IModuleInterface implementation */
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
+
+private:
+    void RegisterContentBrowserMenu();
+
+    void OnGenerateSubMenuForAssetContext(UToolMenu* InMenu);
+    void OnGenerateSubMenuForFolderContext(UToolMenu* InMenu);
+
+    void OnAnalyzeStaticMeshSimilarity(const UContentBrowserAssetContextMenuContext* InAssetContextMenuContext, const UContentBrowserFolderContext* InFolderContext);
+    void OnVisualizeAnalyzeResults();
 };

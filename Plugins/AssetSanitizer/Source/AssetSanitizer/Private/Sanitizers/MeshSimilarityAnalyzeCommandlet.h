@@ -3,11 +3,11 @@
 #include "CoreMinimal.h"
 #include "Commandlets/Commandlet.h"
 
-#include "MeshSimilarityAnalyzer.h"
-
 #include "MeshSimilarityAnalyzeCommandlet.generated.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogMeshSimilarityAnalyzeCommandlet, All, All);
+
+enum class EAnalyzerType :uint8;
 
 UCLASS()
 class UMeshSimilarityAnalyzeCommandlet :public UCommandlet
@@ -15,7 +15,7 @@ class UMeshSimilarityAnalyzeCommandlet :public UCommandlet
 	GENERATED_BODY()
 
 public:
-	virtual int32 Main(const FString& CmdLineParams)override;
+	virtual int32 Main(const FString& InCmdLineParams)override;
 
 private:
 	int32 RunBalancerMode(int32 InNumOfBatches, bool InConsiderDiskSize, const TArray<FString>& InDirectoriesToProcess, const FString& InOutputDir);

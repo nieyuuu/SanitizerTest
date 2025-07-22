@@ -9,9 +9,10 @@ public class AssetSanitizer : ModuleRules
         PublicIncludePaths.AddRange(new string[] { });
         PrivateIncludePaths.AddRange(new string[] { });
 
-        PublicDependencyModuleNames.AddRange(new string[] { "Core", "DeveloperSettings", "Json", "JsonUtilities" });
+        PublicDependencyModuleNames.AddRange(new string[] { "Core" });
         PrivateDependencyModuleNames.AddRange(new string[] { "CoreUObject", "Engine", "Slate", "SlateCore", "AssetRegistry",
-            "MeshDescription", "StaticMeshDescription" });
+            "MeshDescription", "StaticMeshDescription","DeveloperSettings", "Json", "JsonUtilities", "EditorStyle",
+            "ContentBrowser", "InputCore", "DesktopPlatform", "UnrealEd", "ToolMenus", "AssetTools" });
 
         DynamicallyLoadedModuleNames.AddRange(new string[] { });
     }

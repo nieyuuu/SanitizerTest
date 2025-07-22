@@ -32,7 +32,7 @@ public:
 	EAnalyzerType AnalyzerType;
 
 #if WITH_EDITOR
-	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)override;
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& InPropertyChangedEvent)override;
 #endif
 
 	virtual FName GetCategoryName()const

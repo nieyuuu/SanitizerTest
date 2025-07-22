@@ -4,6 +4,65 @@
 #include "StaticMeshAttributes.h"
 #include "StaticMeshOperations.h"
 
+struct FDefaultWeightCalculator
+{
+	double operator()(const FAssetData& InAssetData)
+	{
+		return 1.0;
+	}
+};
+
+struct FDiskSizeWeightCalculator
+{
+	double operator()(const FAssetData& InAssetData)
+	{
+		const FString PackagePath = InAssetData.PackageName.ToString();
+		const FString PackageFileName = FPackageName::LongPackageNameToFilename(PackagePath);
+
+		const FString UAssetPath = FPaths::SetExtension(PackageFileName, TEXT(".uasset"));
+		const FString UExpPath = FPaths::SetExtension(PackageFileName, TEXT(".uexp"));
+
+		int64 TotalSize = 0;
+		if (IFileManager::Get().FileExists(*UAssetPath))
+		{
+			TotalSize += IFileManager::Get().FileSize(*UAssetPath);
+		}
+		//Cooked editor?
+		if (IFileManager::Get().FileExists(*UExpPath))
+		{
+			TotalSize += IFileManager::Get().FileSize(*UExpPath);
+		}
+
+		return TotalSize / (1024.0 * 1024.0);
+	}
+};
+
+TArray<TArray<FString>> FPreprocessBalancer::BalanceStaticMeshes(const TArray<FString>& InDirsToProcess, int32 InNumOfBatches)
+{
+	return BalanceStaticMeshesImp<FDefaultWeightCalculator>(InDirsToProcess, InNumOfBatches);
+}
+
+TArray<TArray<FString>> FPreprocessBalancer::BalanceStaticMeshesBasedOnDiskSize(const TArray<FString>& InDirsToProcess, int32 InNumOfBatches)
+{
+	return BalanceStaticMeshesImp<FDiskSizeWeightCalculator>(InDirsToProcess, InNumOfBatches);
+}
+
+FString PreprocessStatusToString(EPreprocessStatus InStatus)
+{
+	check(InStatus >= EPreprocessStatus::Unknown && InStatus <= EPreprocessStatus::PositionBufferContainsNaN);
+
+	static FString StatusTable[] = {
+		FString("UnKnown"),
+		FString("NoError"),
+		FString("InvalidObjectPath"),
+		FString("LOD0SourceModelNotFound"),
+		FString("MeshDescriptionNotFound"),
+		FString("PositionBufferContainsNaN")
+	};
+
+	return StatusTable[int32(InStatus)];
+}
+
 namespace StaticMeshPreprocessing
 {
 	const FQuantizedStaticMesh* FPreprocessRegistry::TryFind(const FString& InStaticMeshObjectPath)const
@@ -189,7 +248,7 @@ namespace StaticMeshPreprocessing
 				check(MeshDescription->IsVertexValid(VertexID));
 
 				//We dont care if a vertex is orphaned or not
-				//const bool OrphanedVertex = MeshDescription->IsVertexOrphaned(VertexID);
+				//const bool bOrphanedVertex = MeshDescription->IsVertexOrphaned(VertexID);
 
 				const FVector3f& Position = VertexPositions[VertexID];
 				if (Position.ContainsNaN())
@@ -232,7 +291,7 @@ namespace StaticMeshPreprocessing
 			TEXT("ParallelPreprocessStaticMeshes"),
 			ParallelForContexts,
 			StaticMeshesToProcess.Num(),
-			64,
+			32,
 			MoveTemp(ContextConstructor),
 			MoveTemp(LoopBody),
 			EParallelForFlags::Unbalanced);
@@ -333,41 +392,4 @@ namespace StaticMeshPreprocessing
 
 		return MoveTemp(OutRegistry);
 	}
-}
-
-double FDefaultWeightCalculator::operator()(const FAssetData& InAssetData)
-{
-	return 1.0;
-}
-
-double FDiskSizeWeightCalculator::operator()(const FAssetData& InAssetData)
-{
-	const FString PackagePath = InAssetData.PackageName.ToString();
-	const FString PackageFileName = FPackageName::LongPackageNameToFilename(PackagePath);
-
-	const FString UAssetPath = FPaths::SetExtension(PackageFileName, TEXT(".uasset"));
-	const FString UexpPath = FPaths::SetExtension(PackageFileName, TEXT(".uexp"));
-
-	int64 TotalSize = 0;
-	if (IFileManager::Get().FileExists(*UAssetPath))
-	{
-		TotalSize += IFileManager::Get().FileSize(*UAssetPath);
-	}
-	//Cooked editor?
-	if (IFileManager::Get().FileExists(*UexpPath))
-	{
-		TotalSize += IFileManager::Get().FileSize(*UexpPath);
-	}
-
-	return TotalSize / (1024.0 * 1024.0);
-}
-
-TArray<TArray<FString>> FPreprocessBalancer::BalanceStaticMeshes(const TArray<FString>& InDirsToProcess, int32 InNumOfBatches)
-{
-	return BalanceStaticMeshesImp<FDefaultWeightCalculator>(InDirsToProcess, InNumOfBatches);
-}
-
-TArray<TArray<FString>> FPreprocessBalancer::BalanceStaticMeshesBasedOnDiskSize(const TArray<FString>& InDirsToProcess, int32 InNumOfBatches)
-{
-	return BalanceStaticMeshesImp<FDiskSizeWeightCalculator>(InDirsToProcess, InNumOfBatches);
 }

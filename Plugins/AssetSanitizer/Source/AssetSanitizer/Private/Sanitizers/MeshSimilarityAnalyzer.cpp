@@ -2,6 +2,19 @@
 
 #include "JsonObjectConverter.h"
 
+FString AnalyzerTypeToString(EAnalyzerType InType)
+{
+	check(InType >= EAnalyzerType::PerVertex && InType <= EAnalyzerType::XxHash128);
+
+	static FString TypeTable[] = {
+		FString("PerVertex"),
+		FString("XxHash64"),
+		FString("XxHash128")
+	};
+
+	return TypeTable[int32(InType)];
+}
+
 bool FAnalyzeResults::SaveTo(FAnalyzeResults& InResults, const FString& InSaveFileName)
 {
 	if (!InSaveFileName.EndsWith(".json"))
@@ -63,11 +76,11 @@ bool FAnalyzeResults::LoadFrom(FAnalyzeResults& InResults, const FString& InLoad
 
 namespace Analyzer
 {
-	bool IMeshSimilarityAnalyzer::Analyzes(const TSet<FPreprocessRegistry*>& InRegistries, FAnalyzeResults& OutResults)const
+	bool IMeshSimilarityAnalyzer::Analyzes(const TArray<FPreprocessRegistry*>& InRegistries, FAnalyzeResults& OutResults)const
 	{
 		if (InRegistries.Num() == 0)
 		{
-			UE_LOG(LogAssetSanitizer, Warning, TEXT("Empty registry set"));
+			UE_LOG(LogAssetSanitizer, Warning, TEXT("No input registry"));
 			return true;
 		}
 
@@ -87,7 +100,7 @@ namespace Analyzer
 		}
 		
 		//Assemble final results
-		OutResults.QuantizationExponent = (*InRegistries.begin())->GetQuantizationExponent();
+		OutResults.QuantizationExponent = InRegistries[0]->GetQuantizationExponent();
 		OutResults.ObjectPathToErrorStatus.Empty();
 		for (const FPreprocessRegistry* Registry : InRegistries)
 		{
@@ -116,7 +129,7 @@ namespace Analyzer
 		return true;
 	}
 
-	bool IMeshSimilarityAnalyzer::ClassifyStaticMeshes(const TSet<FPreprocessRegistry*>& InRegistries, TMap<int32, TArray<const FPreprocessedStaticMesh*>>& OutClassifiedStaticMeshes)const
+	bool IMeshSimilarityAnalyzer::ClassifyStaticMeshes(const TArray<FPreprocessRegistry*>& InRegistries, TMap<int32, TArray<const FPreprocessedStaticMesh*>>& OutClassifiedStaticMeshes)const
 	{
 		OutClassifiedStaticMeshes.Empty();
 
@@ -241,20 +254,26 @@ namespace Analyzer
 		const FBox& BoundingBoxB = B->GetBoundingBox();
 		if (!BoundingBoxA.Equals(BoundingBoxB))
 		{
-			/*UE_LOG(LogAssetSanitizer, VeryVerbose, TEXT("Static Mesh [%s] and [%s] are different because bounding boxes not matching."),
-				*A->GetStaticMeshObjectPath(), *B->GetStaticMeshObjectPath());*/
 			return false;
+		}
+		else
+		{
+			UE_LOG(LogAssetSanitizer, VeryVerbose, TEXT("Static mesh [%s] and [%s] are potentially identical because their bounding boxes are equal."),
+				*A->GetStaticMeshObjectPath(), *B->GetStaticMeshObjectPath());
 		}
 
 		//Do a random position test
 		const int32 RandomIndex = FMath::RandRange(0, NumberOfVertexA - 1);
 		if (PositionBufferA[RandomIndex] != PositionBufferB[RandomIndex])
 		{
-			/*UE_LOG(LogAssetSanitizer, VeryVerbose, TEXT("Static Mesh [%s] and [%s] are different because random position test (%lld,%lld,%lld) != (%lld,%lld,%lld)."),
+			return false;
+		}
+		else
+		{
+			UE_LOG(LogAssetSanitizer, VeryVerbose, TEXT("Static mesh [%s] and [%s] are potentially identical because random position test (%lld,%lld,%lld) == (%lld,%lld,%lld)."),
 				*A->GetStaticMeshObjectPath(), *B->GetStaticMeshObjectPath(),
 				PositionBufferA[RandomIndex].X, PositionBufferA[RandomIndex].Y, PositionBufferA[RandomIndex].Z,
-				PositionBufferB[RandomIndex].X, PositionBufferB[RandomIndex].Y, PositionBufferB[RandomIndex].Z);*/
-			return false;
+				PositionBufferB[RandomIndex].X, PositionBufferB[RandomIndex].Y, PositionBufferB[RandomIndex].Z);
 		}
 
 		struct FContext
@@ -264,18 +283,16 @@ namespace Analyzer
 
 		auto LoopBody = [&](FContext& Context, int32 Index) {
 			FTaskTagScope TaskTag(ETaskTag::EParallelGameThread);
-			if (Context.bIdenticalInThisContext == false)
+			if (Context.bIdenticalInThisContext)
 			{
-				return;
-			}
-
-			if (PositionBufferA[Index] != PositionBufferB[Index])
-			{
-				/*UE_LOG(LogAssetSanitizer, VeryVerbose, TEXT("Static Mesh [%s] and [%s] are different because position test (%lld,%lld,%lld) != (%lld,%lld,%lld)."),
-					*A->GetStaticMeshObjectPath(), *B->GetStaticMeshObjectPath(),
-					PositionBufferA[Index].X, PositionBufferA[Index].Y, PositionBufferA[Index].Z,
-					PositionBufferB[Index].X, PositionBufferB[Index].Y, PositionBufferB[Index].Z);*/
-				Context.bIdenticalInThisContext = false;
+				if (PositionBufferA[Index] != PositionBufferB[Index])
+				{
+					/*UE_LOG(LogAssetSanitizer, VeryVerbose, TEXT("Static mesh [%s] and [%s] are different because position test (%lld,%lld,%lld) != (%lld,%lld,%lld)."),
+						*A->GetStaticMeshObjectPath(), *B->GetStaticMeshObjectPath(),
+						PositionBufferA[Index].X, PositionBufferA[Index].Y, PositionBufferA[Index].Z,
+						PositionBufferB[Index].X, PositionBufferB[Index].Y, PositionBufferB[Index].Z);*/
+					Context.bIdenticalInThisContext = false;
+				}
 			}
 		};
 
@@ -284,7 +301,7 @@ namespace Analyzer
 			TEXT("ParallelPerVertexCompareStaticMeshes"),
 			Contexts,
 			NumberOfVertexA,
-			1024,
+			4096,
 			MoveTemp(LoopBody),
 			EParallelForFlags::Unbalanced
 		);
@@ -303,4 +320,52 @@ namespace Analyzer
 
 		return bIdenticalPositionBuffer;
 	}
+}
+
+bool AnalyzeMeshSimilarity(EAnalyzerType InAnalyzerType, const TArray<FPreprocessRegistry*>& InRegistries, FAnalyzeResults& OutResults)
+{
+	IMeshSimilarityAnalyzer* MeshSimilarityAnalyzer = nullptr;
+
+	switch (InAnalyzerType)
+	{
+	case EAnalyzerType::PerVertex:
+		MeshSimilarityAnalyzer = new FPerVertexAnalyzer();
+		break;
+	case EAnalyzerType::XxHash64:
+		MeshSimilarityAnalyzer = new FXxHash64Analyzer();
+		break;
+	case EAnalyzerType::XxHash128:
+		MeshSimilarityAnalyzer = new FXxHash128Analyzer();
+		break;
+	default:
+		check(0)
+			break;
+	}
+
+	struct FScopeGuard
+	{
+		FScopeGuard(IMeshSimilarityAnalyzer* InMeshSimilarityAnalyzer)
+		{
+			MeshSimilarityAnalyzer = InMeshSimilarityAnalyzer;
+		}
+		~FScopeGuard()
+		{
+			if (MeshSimilarityAnalyzer)
+			{
+				delete MeshSimilarityAnalyzer;
+			}
+		}
+
+		IMeshSimilarityAnalyzer* MeshSimilarityAnalyzer;
+	};
+
+	FScopeGuard Guard(MeshSimilarityAnalyzer);
+
+	FAnalyzeResults Results;
+	if (!MeshSimilarityAnalyzer->Analyzes(InRegistries, OutResults))
+	{
+		return false;
+	}
+
+	return true;
 }
