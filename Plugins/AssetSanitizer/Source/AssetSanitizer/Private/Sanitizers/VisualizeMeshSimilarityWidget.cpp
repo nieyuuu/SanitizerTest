@@ -27,7 +27,7 @@ void SVisualizeMeshSimilarity::Construct(const FArguments& InArgs, TSharedPtr<FA
 
 	AnalyzeResults = InResults;
 	ThumbnailPool = MakeShareable(new FAssetThumbnailPool(256));
-
+	
 	ReCacheListViewSources();
 	SimilarGroupSource = CachedSimilarGroupSource;
 	ErrorStatusSource = CachedErrorStatusSource;
@@ -165,16 +165,11 @@ END_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
 void SVisualizeMeshSimilarity::OpenVisualizeMeshSimilarityDialog(TSharedPtr<FAnalyzeResults> InResults)
 {
-	if (InResults.Get() == nullptr)
-	{
-		InResults = MakeShared<FAnalyzeResults>();
-	}
-
 	TSharedRef<SWindow> VisualizeMeshSimilarityWindow = SNew(SWindow)
 		.Title(LOCTEXT("VisualizeMeshSimilarityTitle", "Mesh Similarity Analyze Results"))
 		.ClientSize(FVector2D(1200, 800))
-		.SupportsMaximize(false)
-		.SupportsMinimize(false)
+		.SupportsMaximize(true)
+		.SupportsMinimize(true)
 		[
 			SNew(SVisualizeMeshSimilarity, InResults)
 		];
@@ -312,12 +307,14 @@ TSharedRef<ITableRow> SVisualizeMeshSimilarity::GenerateSimilarGroupRow(TSharedP
 TSharedRef<SWidget> SVisualizeMeshSimilarity::ConstructMeshThumbnailPreview(const TArray<FSoftObjectPath>& InMeshObjectPaths)
 {
 	TSharedPtr<SWrapBox> ThumbnailContainer = SNew(SWrapBox).UseAllottedSize(true).InnerSlotPadding(FVector2D(5, 5));
-	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(AssetRegistryConstants::ModuleName);
 
 	for (const FSoftObjectPath& ObjectPath : InMeshObjectPaths)
 	{
 		FAssetData AssetData = AssetRegistryModule.Get().GetAssetByObjectPath(ObjectPath);
 		TSharedPtr<FAssetThumbnail> AssetThumbnail = MakeShareable(new FAssetThumbnail(AssetData, 128, 128, ThumbnailPool));
+		
+		AssetThumbnail->SetRealTime(false);
 
 		ThumbnailContainer->AddSlot()
 		[
@@ -344,7 +341,7 @@ TSharedRef<SWidget> SVisualizeMeshSimilarity::ConstructMeshThumbnailPreview(cons
 						SNew(SHyperlink)
 						.Text(FText::FromString(FPaths::GetBaseFilename(ObjectPath.ToString())))
 						.OnNavigate_Lambda([ObjectPath]() {
-							FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+							FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(AssetRegistryConstants::ModuleName);
 							FAssetData AssetData = AssetRegistryModule.Get().GetAssetByObjectPath(ObjectPath);
 							if (AssetData.IsValid())
 							{
@@ -481,7 +478,7 @@ void SVisualizeMeshSimilarity::BrowseAssetsInGroup(int32 InGroupIndex)
 	if (!CachedSimilarGroupSource.IsValidIndex(InGroupIndex))
 		return;
 
-	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(AssetRegistryConstants::ModuleName);
 
 	const TArray<FSoftObjectPath>& MeshesObjectPaths = CachedSimilarGroupSource[InGroupIndex]->SimilarGroup->SimilarStaticMeshes;
 	TArray<FAssetData> AssetsToBrowse;
@@ -494,7 +491,6 @@ void SVisualizeMeshSimilarity::BrowseAssetsInGroup(int32 InGroupIndex)
 		}
 		else
 		{
-
 			FNotificationInfo Info(FText::Format(LOCTEXT("AssetNotFoundForGroup", "No valid assets found for {0}"), FText::FromString(ObjectPath.ToString())));
 			Info.ExpireDuration = 5.0f;
 			FSlateNotificationManager::Get().AddNotification(Info);

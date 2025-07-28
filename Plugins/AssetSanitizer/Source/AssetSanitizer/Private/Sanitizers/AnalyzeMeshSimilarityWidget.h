@@ -72,7 +72,7 @@ private:
 
 	void GetChildrenForNode(TSharedPtr<FStaticMeshReportNode> InTreeItem, TArray<TSharedPtr<FStaticMeshReportNode>>& OutChildren);
 
-	ECheckBoxState GetEnaCheckBoxStateForNode(TSharedPtr<FStaticMeshReportNode> InTreeItem) const;
+	ECheckBoxState GetCheckBoxStateForNode(TSharedPtr<FStaticMeshReportNode> InTreeItem) const;
 	const FSlateBrush* GetNodeIcon(const TSharedPtr<FStaticMeshReportNode>& InStaticMeshReportNode) const;
 
 	FReply OnOkClicked();

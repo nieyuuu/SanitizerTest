@@ -8,10 +8,12 @@
 #include "Widgets/Input/SSpinBox.h"
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Layout/SUniformGridPanel.h"
+#include "Widgets/Notifications/SNotificationList.h"
 #include "Layout/WidgetPath.h"
 #include "Styling/AppStyle.h"
 #include "SlateOptMacros.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Framework/Notifications/NotificationManager.h"
 #include "Interfaces/IMainFrameModule.h"
 #include "StaticMeshCompiler.h"
 
@@ -132,6 +134,7 @@ void SAnalyzeMeshSimilarity::Construct(const FArguments& InArgs, TSharedPtr<TArr
 		.BorderImage(FAppStyle::GetBrush("Docking.Tab.ContentAreaBrush"))
 		.Padding(FMargin(4, 8, 4, 4))
 		[
+			//Quantization exponent
 			SNew(SVerticalBox)
 			+ SVerticalBox::Slot()
 			.AutoHeight()
@@ -168,6 +171,7 @@ void SAnalyzeMeshSimilarity::Construct(const FArguments& InArgs, TSharedPtr<TArr
 						})
 					]
 				]
+				//Analyzer type
 				+ SHorizontalBox::Slot()
 				.FillWidth(1.f)
 				.HAlign(HAlign_Right)
@@ -201,6 +205,16 @@ void SAnalyzeMeshSimilarity::Construct(const FArguments& InArgs, TSharedPtr<TArr
 					]
 				]
 			]
+			//Tool tip message
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0, 4)
+			[
+				SNew(STextBlock)
+				.Text(LOCTEXT("AnalyzeReportTitle", "The following static meshes will be analyzed with the given parameters."))
+				.TextStyle(FAppStyle::Get(), "PackageMigration.DialogTitle")
+			]
+			//Tree view
 			+ SVerticalBox::Slot()
 			.FillHeight(1.f)
 			[
@@ -214,6 +228,7 @@ void SAnalyzeMeshSimilarity::Construct(const FArguments& InArgs, TSharedPtr<TArr
 					.OnGetChildren(this, &SAnalyzeMeshSimilarity::GetChildrenForNode)
 				]
 			]
+			//OK/Cancel button
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.HAlign(HAlign_Right)
@@ -243,6 +258,7 @@ void SAnalyzeMeshSimilarity::Construct(const FArguments& InArgs, TSharedPtr<TArr
 		]
 	];
 
+	//Expand after construct
 	if (ensure(TreeView.IsValid()))
 	{
 		RootNode.ExpandChildrenRecursively(TreeView.ToSharedRef());
@@ -252,16 +268,11 @@ END_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
 void SAnalyzeMeshSimilarity::OpenAnalyzeMeshSimilarityDialog(TSharedPtr<TArray<FStaticMeshReportData>> InStaticMeshReportDatas)
 {
-	if (InStaticMeshReportDatas.Get() == nullptr)
-	{
-		InStaticMeshReportDatas = MakeShared<TArray<FStaticMeshReportData>>();
-	}
-
 	TSharedRef<SWindow> AnalyzeMeshSimilarityWindow = SNew(SWindow)
 		.Title(LOCTEXT("AnalyzeMeshSimilarityTitle", "Analyze Mesh Similarity"))
 		.ClientSize(FVector2D(800, 600))
-		.SupportsMaximize(false)
-		.SupportsMinimize(false)
+		.SupportsMaximize(true)
+		.SupportsMinimize(true)
 		[
 			SNew(SAnalyzeMeshSimilarity, InStaticMeshReportDatas)
 		];
@@ -310,7 +321,7 @@ TSharedRef<ITableRow> SAnalyzeMeshSimilarity::GenerateTreeRow(TSharedPtr<FStatic
 			[
 				SNew(SCheckBox)
 				.OnCheckStateChanged(this, &SAnalyzeMeshSimilarity::OnCheckBoxStateChanged, InTreeItem, InOwnerTable)
-				.IsChecked(this, &SAnalyzeMeshSimilarity::GetEnaCheckBoxStateForNode, InTreeItem)
+				.IsChecked(this, &SAnalyzeMeshSimilarity::GetCheckBoxStateForNode, InTreeItem)
 			]
 			+ SHorizontalBox::Slot()
 			.AutoWidth()
@@ -381,7 +392,7 @@ void SAnalyzeMeshSimilarity::GetChildrenForNode(TSharedPtr<FStaticMeshReportNode
 	OutChildren = InTreeItem->Children;
 }
 
-ECheckBoxState SAnalyzeMeshSimilarity::GetEnaCheckBoxStateForNode(TSharedPtr<FStaticMeshReportNode> InTreeItem) const
+ECheckBoxState SAnalyzeMeshSimilarity::GetCheckBoxStateForNode(TSharedPtr<FStaticMeshReportNode> InTreeItem) const
 {
 	return InTreeItem.Get()->CheckBoxState;
 }
@@ -413,23 +424,24 @@ FReply SAnalyzeMeshSimilarity::OnOkClicked()
 		}
 	}
 
-	FScopedSlowTask SlowTask(4, LOCTEXT("AnalyzeMeshSimilarity_LoadingStaticMeshes", "Loading Static Meshes..."));
+	FScopedSlowTask SlowTask(5, LOCTEXT("AnalyzeMeshSimilarity_LoadingStaticMeshes", "Loading Static Meshes..."));
 	SlowTask.MakeDialog(false, false);
 
+	//Load static meshes
 	SlowTask.EnterProgressFrame(1, LOCTEXT("AnalyzeMeshSimilarity_LoadingStaticMeshes", "Loading Static Meshes..."));
 	
 	TSet<const UStaticMesh*> LoadedStaticMeshes;
+	TArray<UStaticMesh*> PendingCompilingStaticMeshes;
 	TArray<FString> FailedToLoadObjectPaths;
-	TSet<UStaticMesh*> PendingCompilingStaticMeshes;
-	LoadedStaticMeshes.Reserve(UniqueStaticMeshObjectPaths.Num());
 
+	LoadedStaticMeshes.Reserve(UniqueStaticMeshObjectPaths.Num());
 	for (const FString& ObjectPaths : UniqueStaticMeshObjectPaths)
 	{
 		UStaticMesh* StaticMesh = FindObject<UStaticMesh>(nullptr, *ObjectPaths);
 
 		if (StaticMesh == nullptr)
 		{
-			StaticMesh = LoadObject<UStaticMesh>(nullptr, *ObjectPaths, nullptr);
+			StaticMesh = LoadObject<UStaticMesh>(nullptr, *ObjectPaths);
 		}
 		if (StaticMesh == nullptr)
 		{
@@ -438,7 +450,7 @@ FReply SAnalyzeMeshSimilarity::OnOkClicked()
 		}
 		if (StaticMesh == nullptr)
 		{
-			FailedToLoadObjectPaths.Add(*ObjectPaths);
+			FailedToLoadObjectPaths.Add(ObjectPaths);
 		}
 		else
 		{
@@ -452,17 +464,26 @@ FReply SAnalyzeMeshSimilarity::OnOkClicked()
 		}
 	}
 
+	//Wait for static meshes finishing compiling
 	SlowTask.EnterProgressFrame(1, LOCTEXT("AnalyzeMeshSimilarity_WaitingForCompiling", "Waiting for Static Meshes Finishing Compiling..."));
-	FStaticMeshCompilingManager::Get().FinishCompilation(PendingCompilingStaticMeshes.Array());
+	FStaticMeshCompilingManager::Get().FinishCompilation(PendingCompilingStaticMeshes);
 
+	//Preprocess
 	SlowTask.EnterProgressFrame(1, LOCTEXT("AnalyzeMeshSimilarity_PreprocessingStaticMeshes", "Preprocessing Static Meshes..."));
 	TUniquePtr<FPreprocessRegistry> Registry = FPreprocessRegistry::PreprocessStaticMeshes(LoadedStaticMeshes, FPreprocessSettings(QuantizationExponent));
 
+	//Perform a garbage collection
+	SlowTask.EnterProgressFrame(1, LOCTEXT("AnalyzeMeshSimilarity_CollectGarbage", "Collecting Garbage..."));
+	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
+
+	//Analyze
 	SlowTask.EnterProgressFrame(1, LOCTEXT("AnalyzeMeshSimilarity_AnalyzeMeshSimilarity", "Analyzing Static Mesh Similarity..."));
 	TSharedPtr<FAnalyzeResults> Results = MakeShared<FAnalyzeResults>();
 	if (!AnalyzeMeshSimilarity(*SelectedAnalyzerTypeOption, { Registry.Get() }, *Results))
 	{
-		UE_LOG(LogAssetSanitizer, Error, TEXT("Failed to analyze mesh similarity"));
+		FNotificationInfo Info(LOCTEXT("FailedToAnalyze", "Failed to analyze mesh similarity."));
+		Info.ExpireDuration = 5.0f;
+		FSlateNotificationManager::Get().AddNotification(Info);
 	}
 	else
 	{

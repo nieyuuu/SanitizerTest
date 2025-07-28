@@ -248,6 +248,7 @@ namespace Analyzer
 
 		const int32 NumberOfVertexA = PositionBufferA.Num();
 		const int32 NumberOfVertexB = PositionBufferB.Num();
+		check(NumberOfVertexA == NumberOfVertexB);
 
 		//Bounding box test first since they are most likly to be different
 		const FBox& BoundingBoxA = A->GetBoundingBox();
@@ -276,49 +277,32 @@ namespace Analyzer
 				PositionBufferB[RandomIndex].X, PositionBufferB[RandomIndex].Y, PositionBufferB[RandomIndex].Z);
 		}
 
-		struct FContext
-		{
-			bool bIdenticalInThisContext = true;
-		};
+		std::atomic<bool> bIdentical = true;
 
-		auto LoopBody = [&](FContext& Context, int32 Index) {
+		auto LoopBody = [&](int32 Index) {
 			FTaskTagScope TaskTag(ETaskTag::EParallelGameThread);
-			if (Context.bIdenticalInThisContext)
+			if (bIdentical.load(std::memory_order_relaxed))
 			{
 				if (PositionBufferA[Index] != PositionBufferB[Index])
 				{
-					/*UE_LOG(LogAssetSanitizer, VeryVerbose, TEXT("Static mesh [%s] and [%s] are different because position test (%lld,%lld,%lld) != (%lld,%lld,%lld)."),
+					UE_LOG(LogAssetSanitizer, VeryVerbose, TEXT("Static mesh [%s] and [%s] are different because position test (%lld,%lld,%lld) != (%lld,%lld,%lld)."),
 						*A->GetStaticMeshObjectPath(), *B->GetStaticMeshObjectPath(),
 						PositionBufferA[Index].X, PositionBufferA[Index].Y, PositionBufferA[Index].Z,
-						PositionBufferB[Index].X, PositionBufferB[Index].Y, PositionBufferB[Index].Z);*/
-					Context.bIdenticalInThisContext = false;
+						PositionBufferB[Index].X, PositionBufferB[Index].Y, PositionBufferB[Index].Z);
+					bIdentical.store(false, std::memory_order_relaxed);
 				}
 			}
 		};
 
-		TArray<FContext> Contexts;
-		ParallelForWithTaskContext(
+		ParallelFor(
 			TEXT("ParallelPerVertexCompareStaticMeshes"),
-			Contexts,
 			NumberOfVertexA,
 			4096,
 			MoveTemp(LoopBody),
 			EParallelForFlags::Unbalanced
 		);
 
-		bool bIdenticalPositionBuffer = true;
-		for (const FContext& Context : Contexts)
-		{
-			if (Context.bIdenticalInThisContext == false)
-			{
-				bIdenticalPositionBuffer = false;
-			}
-
-			if (bIdenticalPositionBuffer == false)
-				break;
-		}
-
-		return bIdenticalPositionBuffer;
+		return bIdentical;
 	}
 }
 
@@ -339,7 +323,7 @@ bool AnalyzeMeshSimilarity(EAnalyzerType InAnalyzerType, const TArray<FPreproces
 		break;
 	default:
 		check(0)
-			break;
+		break;
 	}
 
 	struct FScopeGuard

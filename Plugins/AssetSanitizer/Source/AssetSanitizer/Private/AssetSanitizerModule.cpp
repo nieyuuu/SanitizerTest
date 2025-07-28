@@ -5,6 +5,8 @@
 
 #include "AssetViewUtils.h"
 #include "ContentBrowserMenuContexts.h"
+#include "Widgets/Notifications/SNotificationList.h"
+#include "Framework/Notifications/NotificationManager.h"
 
 #define LOCTEXT_NAMESPACE "FAssetSanitizerModule"
 
@@ -12,7 +14,7 @@ void FAssetSanitizerModule::StartupModule()
 {
     if (IsRunningCommandlet())
         return;
-
+    
     UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FAssetSanitizerModule::RegisterContentBrowserMenu));
 }
 
@@ -103,19 +105,19 @@ void FAssetSanitizerModule::OnGenerateSubMenuForFolderContext(UToolMenu* InMenu)
 
 void FAssetSanitizerModule::OnAnalyzeStaticMeshSimilarity(const UContentBrowserAssetContextMenuContext* InAssetContextMenuContext, const UContentBrowserFolderContext* InFolderContext)
 {
-    TArray<FAssetData> StaticMeshAssetDatas;
+    TArray<FAssetData> AssetDatas;
     if (InFolderContext != nullptr)
     {
-        AssetViewUtils::GetAssetsInPaths(InFolderContext->SelectedPackagePaths, StaticMeshAssetDatas);
+        AssetViewUtils::GetAssetsInPaths(InFolderContext->SelectedPackagePaths, AssetDatas);
     }
     else if (InAssetContextMenuContext != nullptr)
     {
-        StaticMeshAssetDatas.Append(InAssetContextMenuContext->SelectedAssets);
+        AssetDatas.Append(InAssetContextMenuContext->SelectedAssets);
     }
 
     TSharedPtr<TArray<FStaticMeshReportData>> StaticMeshesToAnalyze = MakeShared<TArray<FStaticMeshReportData>>();
-    StaticMeshesToAnalyze->Reserve(StaticMeshAssetDatas.Num());
-    for (const FAssetData& AssetData : StaticMeshAssetDatas)
+    StaticMeshesToAnalyze->Reserve(AssetDatas.Num());
+    for (const FAssetData& AssetData : AssetDatas)
     {
         UClass* AssetClass = AssetData.GetClass(EResolveClass::Yes);
         if (AssetClass != nullptr)
@@ -129,6 +131,10 @@ void FAssetSanitizerModule::OnAnalyzeStaticMeshSimilarity(const UContentBrowserA
 
     if (StaticMeshesToAnalyze->Num() < 2)
     {
+        FNotificationInfo Info(LOCTEXT("NoEnoughStaticMeshes", "The input number of static meshes is less than 2."));
+        Info.ExpireDuration = 5.0f;
+        FSlateNotificationManager::Get().AddNotification(Info);
+        
         return;
     }
 

@@ -18,12 +18,12 @@ public:
 	static TArray<TArray<FString>> BalanceStaticMeshesBasedOnDiskSize(const TArray<FString>& InDirsToProcess, int32 InNumOfBatches = MIN_NUM_OF_BATCHES);
 
 private:
-	template<typename WeightCalculatorType>
-	static TArray<TArray<FString>> BalanceStaticMeshesImp(const TArray<FString>& InDirsToProcess, int32 InNumOfBatches);
+	template<typename FWeightCalculatorType>
+	static TArray<TArray<FString>> BalanceStaticMeshesImp(const FWeightCalculatorType& InWeightCalculator, const TArray<FString>& InDirsToProcess, int32 InNumOfBatches);
 };
 
-template<typename WeightCalculatorType>
-inline TArray<TArray<FString>> FPreprocessBalancer::BalanceStaticMeshesImp(const TArray<FString>& InDirsToProcess, int32 InNumOfBatches)
+template<typename FWeightCalculatorType>
+inline TArray<TArray<FString>> FPreprocessBalancer::BalanceStaticMeshesImp(const FWeightCalculatorType& InWeightCalculator, const TArray<FString>& InDirsToProcess, int32 InNumOfBatches)
 {
 	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(AssetRegistryConstants::ModuleName);
 	IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
@@ -52,14 +52,12 @@ inline TArray<TArray<FString>> FPreprocessBalancer::BalanceStaticMeshesImp(const
 	WeightSums.AddDefaulted(ActualNumOfBatches);
 	BalancedBatches.AddDefaulted(ActualNumOfBatches);
 
-	WeightCalculatorType WeightCalculator{};
-
 	for (int i = 0; i < StaticMeshAssetDatas.Num(); ++i)
 	{
-		int32 MinWeightIndex = WeightSums.Find(*Algo::MinElement(WeightSums));
+		int32 MinWeightIndex = WeightSums.IndexOfByKey(*Algo::MinElement(WeightSums));
 
 		BalancedBatches[MinWeightIndex].Add(StaticMeshAssetDatas[i].GetObjectPathString());
-		WeightSums[MinWeightIndex] += WeightCalculator(StaticMeshAssetDatas[i]);
+		WeightSums[MinWeightIndex] += InWeightCalculator(StaticMeshAssetDatas[i]);
 	}
 
 	return MoveTemp(BalancedBatches);
@@ -113,12 +111,10 @@ namespace StaticMeshPreprocessing
 		{
 			return X == InOther.X && Y == InOther.Y && Z == InOther.Z;
 		}
-
 		inline bool operator!=(const FQuantizedVector& InOther)const
 		{
 			return X != InOther.X || Y != InOther.Y || Z != InOther.Z;
 		}
-
 		inline bool operator<(const FQuantizedVector& InOther)const
 		{
 			return X != InOther.X ? X < InOther.X :
@@ -337,7 +333,7 @@ namespace StaticMeshPreprocessing
 						   TEXT("The archive may be corrupted. Consider remove the corrupted archive and retry preprocess static meshes."));
 					InRegistry.ProcessedStaticMeshes.Add(QuantizedStaticMesh);
 
-					//RTTI is disabled in UE by default
+					//RTTI is disabled
 					/*FArchiveFileReaderGeneric* FileReader = dynamic_cast<FArchiveFileReaderGeneric*>(&InAr);
 					if (FileReader)
 					{

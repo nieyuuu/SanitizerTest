@@ -6,7 +6,7 @@
 
 struct FDefaultWeightCalculator
 {
-	double operator()(const FAssetData& InAssetData)
+	inline double operator()(const FAssetData& InAssetData)const
 	{
 		return 1.0;
 	}
@@ -14,13 +14,21 @@ struct FDefaultWeightCalculator
 
 struct FDiskSizeWeightCalculator
 {
-	double operator()(const FAssetData& InAssetData)
+	//TODO: Consider the size of referenced textures
+	inline double operator()(const FAssetData& InAssetData)const
 	{
 		const FString PackagePath = InAssetData.PackageName.ToString();
 		const FString PackageFileName = FPackageName::LongPackageNameToFilename(PackagePath);
 
+		/*FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(AssetRegistryConstants::ModuleName);
+		IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
+
+		TArray<FName> Dependencies;
+		AssetRegistry.GetDependencies(*PackagePath, Dependencies);*/
+
 		const FString UAssetPath = FPaths::SetExtension(PackageFileName, TEXT(".uasset"));
 		const FString UExpPath = FPaths::SetExtension(PackageFileName, TEXT(".uexp"));
+		const FString UBulkPath = FPaths::SetExtension(PackageFileName, TEXT(".ubulk"));
 
 		int64 TotalSize = 0;
 		if (IFileManager::Get().FileExists(*UAssetPath))
@@ -32,6 +40,11 @@ struct FDiskSizeWeightCalculator
 		{
 			TotalSize += IFileManager::Get().FileSize(*UExpPath);
 		}
+		//Cooked editor?
+		if (IFileManager::Get().FileExists(*UBulkPath))
+		{
+			TotalSize += IFileManager::Get().FileSize(*UBulkPath);
+		}
 
 		return TotalSize / (1024.0 * 1024.0);
 	}
@@ -39,12 +52,12 @@ struct FDiskSizeWeightCalculator
 
 TArray<TArray<FString>> FPreprocessBalancer::BalanceStaticMeshes(const TArray<FString>& InDirsToProcess, int32 InNumOfBatches)
 {
-	return BalanceStaticMeshesImp<FDefaultWeightCalculator>(InDirsToProcess, InNumOfBatches);
+	return BalanceStaticMeshesImp(FDefaultWeightCalculator(), InDirsToProcess, InNumOfBatches);
 }
 
 TArray<TArray<FString>> FPreprocessBalancer::BalanceStaticMeshesBasedOnDiskSize(const TArray<FString>& InDirsToProcess, int32 InNumOfBatches)
 {
-	return BalanceStaticMeshesImp<FDiskSizeWeightCalculator>(InDirsToProcess, InNumOfBatches);
+	return BalanceStaticMeshesImp(FDiskSizeWeightCalculator(), InDirsToProcess, InNumOfBatches);
 }
 
 FString PreprocessStatusToString(EPreprocessStatus InStatus)
@@ -264,6 +277,7 @@ namespace StaticMeshPreprocessing
 
 				FQuantizedVector QuantizedVector;
 
+				//int64 overflow/underflow?
 				QuantizedVector.X = int64((double)Position.X * FMath::Pow(10.0, (double)Context.QuantizationExponent));
 				QuantizedVector.Y = int64((double)Position.Y * FMath::Pow(10.0, (double)Context.QuantizationExponent));
 				QuantizedVector.Z = int64((double)Position.Z * FMath::Pow(10.0, (double)Context.QuantizationExponent));
@@ -333,7 +347,9 @@ namespace StaticMeshPreprocessing
 			return true;
 		};
 
-		check(MergeRegistries(ParallelForContexts, *OutRegistry.Get()));
+		const bool MergeSucceed = MergeRegistries(ParallelForContexts, *OutRegistry.Get());
+		
+		check(MergeSucceed);
 		check((OutRegistry.Get()->ObjectPathToErrorStatus.Num() + OutRegistry.Get()->ProcessedStaticMeshes.Num()) == StaticMeshesToProcess.Num());
 
 		const double EndTime = FPlatformTime::Seconds();
@@ -362,7 +378,6 @@ namespace StaticMeshPreprocessing
 				{
 					LoadFlags |= LOAD_SkipLoadImportedPackages;
 				}*/
-				//Can we just load mesh by passing a load_flag to LoadObject(dont load referenced materials and textures)?
 				StaticMesh = LoadObject<UStaticMesh>(nullptr, *ObjectPath, nullptr, LoadFlags);
 			}
 
