@@ -213,6 +213,10 @@ void SVisualizeMeshSimilarity::ReCacheListViewSources()
 		Entry->Status = Pair.Value;
 		CachedErrorStatusSource.Add(Entry);
 	}
+
+	CachedSimilarGroupSource.Sort([](const TSharedPtr<FSimilarGroupEntry>& A, const TSharedPtr<FSimilarGroupEntry>& B) {
+		return A->SimilarGroup->NumOfVertices > B->SimilarGroup->NumOfVertices;
+		});
 }
 
 void SVisualizeMeshSimilarity::OnSearchTextChanged(const FText& InFilterText)
