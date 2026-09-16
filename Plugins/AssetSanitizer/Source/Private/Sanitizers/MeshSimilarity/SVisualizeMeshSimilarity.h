@@ -8,9 +8,9 @@ public:
 	SLATE_BEGIN_ARGS(SVisualizeMeshSimilarity) {}
 	SLATE_END_ARGS()
 
-	void Construct(const FArguments& InArgs, TSharedPtr<FAnalyzeResults> InResults);
+	void Construct(const FArguments& InArgs, TSharedPtr<StaticMeshAnalyzer::FStaticMeshAnalyzeResults> InResults);
 
-	static void OpenVisualizeMeshSimilarityDialog(TSharedPtr<FAnalyzeResults> InResults = MakeShared<FAnalyzeResults>());
+	static void OpenVisualizeMeshSimilarityDialog(TSharedPtr<StaticMeshAnalyzer::FStaticMeshAnalyzeResults> InResults = MakeShared<StaticMeshAnalyzer::FStaticMeshAnalyzeResults>());
 
 	void CloseDialog();
 
@@ -21,7 +21,7 @@ private:
 
 	struct FSimilarGroupEntry
 	{
-		const FSimilarGroup* SimilarGroup = nullptr;
+		const StaticMeshAnalyzer::FStaticMeshSimilarGroup* SimilarGroup = nullptr;
 	};
 
 	TSharedRef<ITableRow> GenerateSimilarGroupRow(TSharedPtr<FSimilarGroupEntry> InSimilarGroupEntry, const TSharedRef<STableViewBase>& InOwnerTable);
@@ -30,7 +30,7 @@ private:
 	struct FErrorStatusEntry
 	{
 		const FString* ObjectPath = nullptr;
-		EPreprocessStatus Status = EPreprocessStatus::Unknown;
+		StaticMeshPreprocessor::EStaticMeshStatus Status = StaticMeshPreprocessor::EStaticMeshStatus::Unknown;
 	};
 
 	TSharedRef<ITableRow> GenerateErrorStatusRow(TSharedPtr<FErrorStatusEntry> InErrorStatusEntry, const TSharedRef<STableViewBase>& InOwnerTable);
@@ -40,9 +40,7 @@ private:
 
 	void BrowseAssetsInGroup(int32 InGroupIndex);
 
-	static FText GetStatusText(EPreprocessStatus InStatus);
-
-	TSharedPtr<FAnalyzeResults> AnalyzeResults;
+	TSharedPtr<StaticMeshAnalyzer::FStaticMeshAnalyzeResults> AnalyzeResults;
 	TSharedPtr<FAssetThumbnailPool> ThumbnailPool;
 
 	FString SearchFilter;

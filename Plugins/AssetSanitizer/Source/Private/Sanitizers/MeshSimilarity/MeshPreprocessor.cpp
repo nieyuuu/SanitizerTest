@@ -1,88 +1,16 @@
-#include "PreprocessStaticMeshes.h"
+#include "MeshPreprocessor.h"
 
 #include "StaticMeshCompiler.h"
 #include "StaticMeshAttributes.h"
 #include "StaticMeshOperations.h"
 
-struct FDefaultWeightCalculator
+namespace StaticMeshPreprocessor
 {
-	inline double operator()(const FAssetData& InAssetData)const
+	const FStaticMesh* FRegistry::TryFind(const FString& InStaticMeshObjectPath)const
 	{
-		return 1.0;
-	}
-};
-
-struct FDiskSizeWeightCalculator
-{
-	//TODO: Consider the size of referenced textures
-	inline double operator()(const FAssetData& InAssetData)const
-	{
-		const FString PackagePath = InAssetData.PackageName.ToString();
-		const FString PackageFileName = FPackageName::LongPackageNameToFilename(PackagePath);
-
-		/*FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(AssetRegistryConstants::ModuleName);
-		IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
-
-		TArray<FName> Dependencies;
-		AssetRegistry.GetDependencies(*PackagePath, Dependencies);*/
-
-		const FString UAssetPath = FPaths::SetExtension(PackageFileName, TEXT(".uasset"));
-		const FString UExpPath = FPaths::SetExtension(PackageFileName, TEXT(".uexp"));
-		const FString UBulkPath = FPaths::SetExtension(PackageFileName, TEXT(".ubulk"));
-
-		int64 TotalSize = 0;
-		if (IFileManager::Get().FileExists(*UAssetPath))
-		{
-			TotalSize += IFileManager::Get().FileSize(*UAssetPath);
-		}
-		//Cooked editor?
-		if (IFileManager::Get().FileExists(*UExpPath))
-		{
-			TotalSize += IFileManager::Get().FileSize(*UExpPath);
-		}
-		//Cooked editor?
-		if (IFileManager::Get().FileExists(*UBulkPath))
-		{
-			TotalSize += IFileManager::Get().FileSize(*UBulkPath);
-		}
-
-		return TotalSize / (1024.0 * 1024.0);
-	}
-};
-
-TArray<TArray<FString>> FPreprocessBalancer::BalanceStaticMeshes(const TArray<FString>& InDirsToProcess, int32 InNumOfBatches)
-{
-	return BalanceStaticMeshesImp(FDefaultWeightCalculator(), InDirsToProcess, InNumOfBatches);
-}
-
-TArray<TArray<FString>> FPreprocessBalancer::BalanceStaticMeshesBasedOnDiskSize(const TArray<FString>& InDirsToProcess, int32 InNumOfBatches)
-{
-	return BalanceStaticMeshesImp(FDiskSizeWeightCalculator(), InDirsToProcess, InNumOfBatches);
-}
-
-FString PreprocessStatusToString(EPreprocessStatus InStatus)
-{
-	check(InStatus >= EPreprocessStatus::Unknown && InStatus <= EPreprocessStatus::PositionBufferContainsNaN);
-
-	static FString StatusTable[] = {
-		FString("UnKnown"),
-		FString("NoError"),
-		FString("InvalidObjectPath"),
-		FString("LOD0SourceModelNotFound"),
-		FString("MeshDescriptionNotFound"),
-		FString("PositionBufferContainsNaN")
-	};
-
-	return StatusTable[int32(InStatus)];
-}
-
-namespace StaticMeshPreprocessing
-{
-	const FQuantizedStaticMesh* FPreprocessRegistry::TryFind(const FString& InStaticMeshObjectPath)const
-	{
-		const FQuantizedStaticMesh *const *pResult = ProcessedStaticMeshes.FindByPredicate([&](const FQuantizedStaticMesh* InQuantizedStaticMesh) {
+		const FStaticMesh* const* pResult = ProcessedStaticMeshes.FindByPredicate([&](const FStaticMesh* InQuantizedStaticMesh) {
 			return InQuantizedStaticMesh->StaticMeshObjectPath == InStaticMeshObjectPath;
-		});
+			});
 
 		if (pResult != nullptr)
 		{
@@ -95,31 +23,31 @@ namespace StaticMeshPreprocessing
 		}
 	}
 
-	EPreprocessStatus FPreprocessRegistry::GetStatusInThisRegistry(const FString& InStaticMeshObjectPath)const
+	EStaticMeshStatus FRegistry::GetStatusInThisRegistry(const FString& InStaticMeshObjectPath)const
 	{
 		if (ObjectPathToErrorStatus.Contains(InStaticMeshObjectPath))
 		{
-			check(ObjectPathToErrorStatus[InStaticMeshObjectPath] > EPreprocessStatus::NoError);
+			check(ObjectPathToErrorStatus[InStaticMeshObjectPath] > EStaticMeshStatus::NoError);
 			return ObjectPathToErrorStatus[InStaticMeshObjectPath];
 		}
 		else if (TryFind(InStaticMeshObjectPath) != nullptr)
 		{
-			return EPreprocessStatus::NoError;
+			return EStaticMeshStatus::NoError;
 		}
 
-		return EPreprocessStatus::Unknown;
+		return EStaticMeshStatus::Unknown;
 	}
 
-	FQuantizedStaticMesh* FPreprocessRegistry::Allocate()const
+	FStaticMesh* FRegistry::Allocate()const
 	{
-		return new FQuantizedStaticMesh();
+		return new FStaticMesh();
 	}
 
-	FQuantizedStaticMesh* FPreprocessRegistry::AllocateAndAddToThisRegistry(const FString& InStaticMeshObjectPath)
+	FStaticMesh* FRegistry::AllocateAndAddToThisRegistry(const FString& InStaticMeshObjectPath)
 	{
 		checkf(TryFind(InStaticMeshObjectPath) == nullptr, TEXT("An entry of [%s] already exists in this registry."), *InStaticMeshObjectPath);
 
-		FQuantizedStaticMesh* Result = Allocate();
+		FStaticMesh* Result = Allocate();
 		Result->QuantizationExponent = QuantizationExponent;
 		Result->StaticMeshObjectPath = InStaticMeshObjectPath;
 
@@ -128,7 +56,7 @@ namespace StaticMeshPreprocessing
 		return Result;
 	}
 
-	bool FPreprocessRegistry::SaveTo(TUniquePtr<FPreprocessRegistry>& InRegistry, const FString& InSaveFileName)
+	bool FRegistry::SaveTo(TUniquePtr<FRegistry>& InRegistry, const FString& InSaveFileName)
 	{
 		if (InRegistry.Get() == nullptr)
 		{
@@ -159,11 +87,11 @@ namespace StaticMeshPreprocessing
 		return true;
 	}
 
-	bool FPreprocessRegistry::LoadFrom(TUniquePtr<FPreprocessRegistry>& InRegistry, const FString& InLoadFileName)
+	bool FRegistry::LoadFrom(TUniquePtr<FRegistry>& InRegistry, const FString& InLoadFileName)
 	{
 		if (InRegistry.Get() == nullptr)
 		{
-			InRegistry = MakeUnique<FPreprocessRegistry>();
+			InRegistry = MakeUnique<FRegistry>();
 		}
 
 		if (!InLoadFileName.EndsWith(TEXT(".bin")))
@@ -198,11 +126,11 @@ namespace StaticMeshPreprocessing
 		return true;
 	}
 
-	TUniquePtr<FPreprocessRegistry> FPreprocessRegistry::PreprocessStaticMeshes(const TSet<const UStaticMesh*>& InStaticMeshesToProcess, FPreprocessSettings InSettings)
+	TUniquePtr<FRegistry> FRegistry::PreprocessStaticMeshes(const TSet<const UStaticMesh*>& InStaticMeshesToProcess, FSettings InSettings)
 	{
 		check(IsInGameThread());
 
-		TUniquePtr<FPreprocessRegistry> OutRegistry = MakeUnique<FPreprocessRegistry>(InSettings.GetQuantizationExponent());
+		TUniquePtr<FRegistry> OutRegistry = MakeUnique<FRegistry>(InSettings.GetQuantizationExponent());
 
 		if (!InStaticMeshesToProcess.Num())
 		{
@@ -227,7 +155,7 @@ namespace StaticMeshPreprocessing
 			FStaticMeshCompilingManager::Get().FinishCompilation(PendingStaticMeshes);
 		}
 
-		auto LoopBody = [&](FPreprocessRegistry& Context, int32 Index) {
+		auto LoopBody = [&](FRegistry& Context, int32 Index) {
 			FTaskTagScope TaskTag(ETaskTag::EParallelGameThread);
 
 			const UStaticMesh* StaticMesh = StaticMeshesToProcess[Index];
@@ -236,23 +164,23 @@ namespace StaticMeshPreprocessing
 			//Preprocess LOD0 source model
 			if (!StaticMesh->IsSourceModelValid(0))
 			{
-				Context.ObjectPathToErrorStatus.Add(StaticMeshObjectPath, EPreprocessStatus::LOD0SourceModelNotFound);
+				Context.ObjectPathToErrorStatus.Add(StaticMeshObjectPath, EStaticMeshStatus::LOD0SourceModelNotFound);
 				return;
 			}
 
 			const FMeshDescription* MeshDescription = StaticMesh->GetMeshDescription(0);
 			if (!MeshDescription)
 			{
-				Context.ObjectPathToErrorStatus.Add(StaticMeshObjectPath, EPreprocessStatus::MeshDescriptionNotFound);
+				Context.ObjectPathToErrorStatus.Add(StaticMeshObjectPath, EStaticMeshStatus::MeshDescriptionNotFound);
 				return;
 			}
 
 			const TMeshElementContainer<FVertexID>& Vertices = MeshDescription->Vertices();
 			const TVertexAttributesRef<const FVector3f>& VertexPositions = MeshDescription->GetVertexPositions();
 
-			FQuantizedStaticMesh* QuantizedStaticMesh = Context.AllocateAndAddToThisRegistry(StaticMeshObjectPath);
-			FBox& BoundingBox = QuantizedStaticMesh->FetchBoundingBox();
-			TArray<FQuantizedVector>& QuantizedPositionBuffer = QuantizedStaticMesh->FetchQuantizedPositionBuffer();
+			FStaticMesh* QuantizedStaticMesh = Context.AllocateAndAddToThisRegistry(StaticMeshObjectPath);
+			FBox& BoundingBox = QuantizedStaticMesh->BoundingBox;
+			TArray<FInt64Vector3>& QuantizedPositionBuffer = QuantizedStaticMesh->QuantizedPositionBuffer;
 
 			QuantizedPositionBuffer.Reserve(VertexPositions.GetRawArray().Num());
 
@@ -269,13 +197,13 @@ namespace StaticMeshPreprocessing
 					Context.ProcessedStaticMeshes.RemoveSwap(QuantizedStaticMesh);
 					delete QuantizedStaticMesh;
 
-					Context.ObjectPathToErrorStatus.Add(StaticMeshObjectPath, EPreprocessStatus::PositionBufferContainsNaN);
+					Context.ObjectPathToErrorStatus.Add(StaticMeshObjectPath, EStaticMeshStatus::PositionBufferContainsNaN);
 					return;
 				}
 
 				BoundingBox += FVector(VertexPositions[VertexID]);
 
-				FQuantizedVector QuantizedVector;
+				FInt64Vector3 QuantizedVector = {};
 
 				//int64 overflow/underflow?
 				QuantizedVector.X = int64((double)Position.X * FMath::Pow(10.0, (double)Context.QuantizationExponent));
@@ -288,14 +216,18 @@ namespace StaticMeshPreprocessing
 			check(BoundingBox.IsValid && !BoundingBox.ContainsNaN());
 
 			//Sort position buffer here
-			QuantizedPositionBuffer.Sort();
-		};
+			QuantizedPositionBuffer.Sort([](const FInt64Vector3& A, const FInt64Vector3& B) {
+				return A.X != B.X ? A.X < B.X :
+					A.Y != B.Y ? A.Y < B.Y :
+					A.Z < B.Z;
+				});
+			};
 
 		auto ContextConstructor = [=](int32 ContextIndex, int32 NumContexts) {
-			return FPreprocessRegistry(InSettings.GetQuantizationExponent());
-		};
+			return FRegistry(InSettings.GetQuantizationExponent());
+			};
 
-		TArray<FPreprocessRegistry> ParallelForContexts;
+		TArray<FRegistry> ParallelForContexts;
 
 		UE_LOG(LogAssetSanitizer, Display, TEXT("Start preprocessing [%d] static meshes."), StaticMeshesToProcess.Num());
 
@@ -310,7 +242,7 @@ namespace StaticMeshPreprocessing
 			MoveTemp(LoopBody),
 			EParallelForFlags::Unbalanced);
 
-		auto MergeRegistries = [](TArray<FPreprocessRegistry>& InRegistriesToMerge, FPreprocessRegistry& OutRegistry) {
+		auto MergeRegistries = [](TArray<FRegistry>& InRegistriesToMerge, FRegistry& OutRegistry) {
 			const int32 QuantizeExponent = OutRegistry.QuantizationExponent;
 			for (const auto& Registry : InRegistriesToMerge)
 			{
@@ -322,17 +254,17 @@ namespace StaticMeshPreprocessing
 
 			for (auto& Registry : InRegistriesToMerge)
 			{
-				TMap<FString, EPreprocessStatus>& ObjectPathToErrorStatus = Registry.ObjectPathToErrorStatus;
-				TArray<FQuantizedStaticMesh*>& ProcessedStaticMeshes = Registry.ProcessedStaticMeshes;
+				TMap<FString, EStaticMeshStatus>& ObjectPathToErrorStatus = Registry.ObjectPathToErrorStatus;
+				TArray<FStaticMesh*>& ProcessedStaticMeshes = Registry.ProcessedStaticMeshes;
 
 				for (const auto& Tuple : ObjectPathToErrorStatus)
 				{
-					if (OutRegistry.GetStatusInThisRegistry(Tuple.Key) != EPreprocessStatus::Unknown)
+					if (OutRegistry.GetStatusInThisRegistry(Tuple.Key) != EStaticMeshStatus::Unknown)
 						return false;
 				}
 				for (const auto& StaticMesh : ProcessedStaticMeshes)
 				{
-					if (OutRegistry.GetStatusInThisRegistry(StaticMesh->GetStaticMeshObjectPath()) != EPreprocessStatus::Unknown)
+					if (OutRegistry.GetStatusInThisRegistry(StaticMesh->GetStaticMeshObjectPath()) != EStaticMeshStatus::Unknown)
 						return false;
 				}
 
@@ -345,10 +277,10 @@ namespace StaticMeshPreprocessing
 			}
 
 			return true;
-		};
+			};
 
 		const bool MergeSucceed = MergeRegistries(ParallelForContexts, *OutRegistry.Get());
-		
+
 		check(MergeSucceed);
 		check((OutRegistry.Get()->ObjectPathToErrorStatus.Num() + OutRegistry.Get()->ProcessedStaticMeshes.Num()) == StaticMeshesToProcess.Num());
 
@@ -359,12 +291,12 @@ namespace StaticMeshPreprocessing
 		return MoveTemp(OutRegistry);
 	}
 
-	TUniquePtr<FPreprocessRegistry> FPreprocessRegistry::PreprocessStaticMeshes(const TSet<FString>& InStaticMeshObjectPaths, FPreprocessSettings InSettings)
+	TUniquePtr<FRegistry> FRegistry::PreprocessStaticMeshes(const TSet<FString>& InStaticMeshObjectPaths, FSettings InSettings)
 	{
 		check(IsInGameThread());
 
 		TSet<const UStaticMesh*> StaticMeshesToProcess;
-		TMap<FString, EPreprocessStatus> InvalidObjectPathList;
+		TMap<FString, EStaticMeshStatus> InvalidObjectPathList;
 
 		StaticMeshesToProcess.Reserve(InStaticMeshObjectPaths.Num());
 		for (const FString& ObjectPath : InStaticMeshObjectPaths)
@@ -389,7 +321,7 @@ namespace StaticMeshPreprocessing
 
 			if (StaticMesh == nullptr)
 			{
-				InvalidObjectPathList.Add(ObjectPath, EPreprocessStatus::InvalidObjectPath);
+				InvalidObjectPathList.Add(ObjectPath, EStaticMeshStatus::InvalidObjectPath);
 			}
 			else
 			{
@@ -398,7 +330,7 @@ namespace StaticMeshPreprocessing
 			}
 		}
 
-		TUniquePtr<FPreprocessRegistry> OutRegistry = PreprocessStaticMeshes(StaticMeshesToProcess, InSettings);
+		TUniquePtr<FRegistry> OutRegistry = PreprocessStaticMeshes(StaticMeshesToProcess, InSettings);
 
 		if (InvalidObjectPathList.Num())
 		{

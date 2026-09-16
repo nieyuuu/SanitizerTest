@@ -90,6 +90,6 @@ private:
 
 	int32 QuantizationExponent = DEFAULT_EXPONENT;
 
-	TArray<TSharedPtr<EAnalyzerType>> AnalyzerTypeOptions;
-	TSharedPtr<EAnalyzerType> SelectedAnalyzerTypeOption;
+	TArray<TSharedPtr<StaticMeshAnalyzer::EStaticMeshAnalyzerType>> AnalyzerTypeOptions;
+	TSharedPtr<StaticMeshAnalyzer::EStaticMeshAnalyzerType> SelectedAnalyzerTypeOption;
 };

@@ -2,81 +2,68 @@
 
 #include "JsonObjectConverter.h"
 
-FString AnalyzerTypeToString(EAnalyzerType InType)
+namespace StaticMeshAnalyzer
 {
-	check(InType >= EAnalyzerType::PerVertex && InType <= EAnalyzerType::XxHash128);
-
-	static FString TypeTable[] = {
-		FString("PerVertex"),
-		FString("XxHash64"),
-		FString("XxHash128")
-	};
-
-	return TypeTable[int32(InType)];
-}
-
-bool FAnalyzeResults::SaveTo(FAnalyzeResults& InResults, const FString& InSaveFileName)
-{
-	if (!InSaveFileName.EndsWith(".json"))
+	bool FStaticMeshAnalyzeResults::SaveTo(FStaticMeshAnalyzeResults& InResults, const FString& InSaveFileName)
 	{
-		return false;
+		if (!InSaveFileName.EndsWith(".json"))
+		{
+			return false;
+		}
+
+		FString JsonString;
+		if (!FJsonObjectConverter::UStructToFormattedJsonObjectString<TCHAR, TPrettyJsonPrintPolicy>(FStaticMeshAnalyzeResults::StaticStruct(), &InResults, JsonString))
+		{
+			UE_LOG(LogAssetSanitizer, Error, TEXT("Failed to convert analyze results to json string."));
+			return false;
+		}
+
+		if (!FFileHelper::SaveStringToFile(JsonString, *InSaveFileName))
+		{
+			UE_LOG(LogAssetSanitizer, Error, TEXT("Failed to save analyze results to [%s]."), *InSaveFileName);
+			return false;
+		}
+
+		return true;
 	}
 
-	FString JsonString;
-	if (!FJsonObjectConverter::UStructToFormattedJsonObjectString<TCHAR, TPrettyJsonPrintPolicy>(FAnalyzeResults::StaticStruct(), &InResults, JsonString))
+	bool FStaticMeshAnalyzeResults::LoadFrom(FStaticMeshAnalyzeResults& InResults, const FString& InLoadFileName)
 	{
-		UE_LOG(LogAssetSanitizer, Error, TEXT("Failed to convert analyze results to json string."));
-		return false;
+		if (!InLoadFileName.EndsWith(TEXT(".json")))
+		{
+			return false;
+		}
+
+		if (!FPlatformFileManager::Get().GetPlatformFile().FileExists(*InLoadFileName))
+		{
+			UE_LOG(LogAssetSanitizer, Error, TEXT("Json file %s does not exist."), *InLoadFileName);
+			return false;
+		}
+
+		TUniquePtr<FArchive> JsonFileReader = TUniquePtr<FArchive>(IFileManager::Get().CreateFileReader(*InLoadFileName));
+		if (JsonFileReader.Get() == nullptr)
+		{
+			UE_LOG(LogAssetSanitizer, Error, TEXT("Failed to create file reader when loading analyze results from %s"), *InLoadFileName);
+			return false;
+		}
+
+		FString LoadedJsonString;
+		if (!FFileHelper::LoadFileToString(LoadedJsonString, *JsonFileReader.Get()))
+		{
+			UE_LOG(LogAssetSanitizer, Error, TEXT("Failed to load analyze results from [%s]."), *InLoadFileName);
+			return false;
+		}
+
+		if (!FJsonObjectConverter::JsonObjectStringToUStruct(LoadedJsonString, &InResults))
+		{
+			UE_LOG(LogAssetSanitizer, Error, TEXT("Failed to convert json string to analyze results."));
+			return false;
+		}
+
+		return true;
 	}
 
-	if (!FFileHelper::SaveStringToFile(JsonString, *InSaveFileName))
-	{
-		UE_LOG(LogAssetSanitizer, Error, TEXT("Failed to save analyze results to [%s]."), *InSaveFileName);
-		return false;
-	}
-
-	return true;
-}
-
-bool FAnalyzeResults::LoadFrom(FAnalyzeResults& InResults, const FString& InLoadFileName)
-{
-	if (!InLoadFileName.EndsWith(TEXT(".json")))
-	{
-		return false;
-	}
-
-	if (!FPlatformFileManager::Get().GetPlatformFile().FileExists(*InLoadFileName))
-	{
-		UE_LOG(LogAssetSanitizer, Error, TEXT("Json file %s does not exist."), *InLoadFileName);
-		return false;
-	}
-
-	TUniquePtr<FArchive> JsonFileReader = TUniquePtr<FArchive>(IFileManager::Get().CreateFileReader(*InLoadFileName));
-	if (JsonFileReader.Get() == nullptr)
-	{
-		UE_LOG(LogAssetSanitizer, Error, TEXT("Failed to create file reader when loading analyze results from %s"), *InLoadFileName);
-		return false;
-	}
-
-	FString LoadedJsonString;
-	if (!FFileHelper::LoadFileToString(LoadedJsonString, *JsonFileReader.Get()))
-	{
-		UE_LOG(LogAssetSanitizer, Error, TEXT("Failed to load analyze results from [%s]."), *InLoadFileName);
-		return false;
-	}
-
-	if (!FJsonObjectConverter::JsonObjectStringToUStruct(LoadedJsonString, &InResults))
-	{
-		UE_LOG(LogAssetSanitizer, Error, TEXT("Failed to convert json string to analyze results."));
-		return false;
-	}
-
-	return true;
-}
-
-namespace Analyzer
-{
-	bool IMeshSimilarityAnalyzer::Analyzes(const TArray<FPreprocessRegistry*>& InRegistries, FAnalyzeResults& OutResults)const
+	bool IMeshSimilarityAnalyzer::Analyzes(const TArray<StaticMeshPreprocessor::FRegistry*>& InRegistries, FStaticMeshAnalyzeResults& OutResults)const
 	{
 		if (InRegistries.Num() == 0)
 		{
@@ -84,7 +71,7 @@ namespace Analyzer
 			return true;
 		}
 
-		TMap<int32, TArray<const FPreprocessedStaticMesh*>> ClassifiedStaticMeshes;
+		TMap<int32, TArray<const StaticMeshPreprocessor::FStaticMesh*>> ClassifiedStaticMeshes;
 		if (!ClassifyStaticMeshes(InRegistries, ClassifiedStaticMeshes))
 		{
 			UE_LOG(LogAssetSanitizer, Error, TEXT("Failed to classify static meshes"));
@@ -93,30 +80,30 @@ namespace Analyzer
 
 		const double StartTime = FPlatformTime::Seconds();
 
-		TArray<TArray<const FPreprocessedStaticMesh*>> Results;
+		TArray<TArray<const StaticMeshPreprocessor::FStaticMesh*>> Results;
 		for (auto Iterator = ClassifiedStaticMeshes.CreateConstIterator(); Iterator; ++Iterator)
 		{
 			AnalyzesSubset(Iterator->Value, Results);
 		}
-		
+
 		//Assemble final results
 		OutResults.QuantizationExponent = InRegistries[0]->GetQuantizationExponent();
 		OutResults.ObjectPathToErrorStatus.Empty();
-		for (const FPreprocessRegistry* Registry : InRegistries)
+		for (const StaticMeshPreprocessor::FRegistry* Registry : InRegistries)
 		{
 			OutResults.ObjectPathToErrorStatus.Append(Registry->GetObjectPathToErrorStatus());
 		}
 		OutResults.SimilarGroups.Empty(Results.Num());
-		for (const TArray<const FPreprocessedStaticMesh*>& SubResult : Results)
+		for (const TArray<const StaticMeshPreprocessor::FStaticMesh*>& SubResult : Results)
 		{
-			FSimilarGroup SimilarGroup;
+			FStaticMeshSimilarGroup SimilarGroup;
 			check(SubResult.Num() >= 2);
 			SimilarGroup.NumOfVertices = SubResult[0]->GetQuantizedPositionBuffer().Num();
-			
-			SimilarGroup.SimilarStaticMeshes.Reserve(SubResult.Num());
-			for (const FPreprocessedStaticMesh* StaticMesh : SubResult)
+
+			SimilarGroup.StaticMeshes.Reserve(SubResult.Num());
+			for (const StaticMeshPreprocessor::FStaticMesh* StaticMesh : SubResult)
 			{
-				SimilarGroup.SimilarStaticMeshes.Add(FSoftObjectPath(StaticMesh->GetStaticMeshObjectPath()));
+				SimilarGroup.StaticMeshes.Add(FSoftObjectPath(StaticMesh->GetStaticMeshObjectPath()));
 			}
 
 			OutResults.SimilarGroups.Add(MoveTemp(SimilarGroup));
@@ -129,14 +116,14 @@ namespace Analyzer
 		return true;
 	}
 
-	bool IMeshSimilarityAnalyzer::ClassifyStaticMeshes(const TArray<FPreprocessRegistry*>& InRegistries, TMap<int32, TArray<const FPreprocessedStaticMesh*>>& OutClassifiedStaticMeshes)const
+	bool IMeshSimilarityAnalyzer::ClassifyStaticMeshes(const TArray<StaticMeshPreprocessor::FRegistry*>& InRegistries, TMap<int32, TArray<const StaticMeshPreprocessor::FStaticMesh*>>& OutClassifiedStaticMeshes)const
 	{
 		OutClassifiedStaticMeshes.Empty();
 
 		TSet<FString> UniqueObjectPathSet;
 		TSet<int32> UniqueExponentSet;
 
-		for (const FPreprocessRegistry* Registry : InRegistries)
+		for (const StaticMeshPreprocessor::FRegistry* Registry : InRegistries)
 		{
 			//All pointers need to be valid
 			if (Registry == nullptr)
@@ -147,9 +134,9 @@ namespace Analyzer
 
 			UniqueExponentSet.Add(Registry->GetQuantizationExponent());
 
-			const TMap<FString, EPreprocessStatus>& ObjectPathToErrorStatus = Registry->GetObjectPathToErrorStatus();
-			const TArray<FPreprocessedStaticMesh*>& ProcessedStaticMeshes = Registry->GetProcessedStaticMeshes();
-			for (const TPair<FString, EPreprocessStatus>& KeyValuePair : ObjectPathToErrorStatus)
+			const TMap<FString, StaticMeshPreprocessor::EStaticMeshStatus>& ObjectPathToErrorStatus = Registry->GetObjectPathToErrorStatus();
+			const TArray<StaticMeshPreprocessor::FStaticMesh*>& ProcessedStaticMeshes = Registry->GetProcessedStaticMeshes();
+			for (const TPair<FString, StaticMeshPreprocessor::EStaticMeshStatus>& KeyValuePair : ObjectPathToErrorStatus)
 			{
 				if (UniqueObjectPathSet.Contains(KeyValuePair.Key))
 				{
@@ -161,7 +148,7 @@ namespace Analyzer
 					UniqueObjectPathSet.Add(KeyValuePair.Key);
 				}
 			}
-			for (const FPreprocessedStaticMesh* StaticMesh : ProcessedStaticMeshes)
+			for (const StaticMeshPreprocessor::FStaticMesh* StaticMesh : ProcessedStaticMeshes)
 			{
 				if (UniqueObjectPathSet.Contains(StaticMesh->GetStaticMeshObjectPath()))
 				{
@@ -179,7 +166,7 @@ namespace Analyzer
 		if (UniqueExponentSet.Num() > 1)
 		{
 			UE_LOG(LogAssetSanitizer, Error, TEXT("Detected %d different quantization exponents in %d registries. It is expected all registries have same quantization exponent."), UniqueExponentSet.Num(), InRegistries.Num());
-			for (const FPreprocessRegistry* Registry : InRegistries)
+			for (const StaticMeshPreprocessor::FRegistry* Registry : InRegistries)
 			{
 				UE_LOG(LogAssetSanitizer, Error, TEXT("Registry file name: [%s], exponent: [%d]."), *(Registry->GetFileName().ToString()), Registry->GetQuantizationExponent());
 			}
@@ -193,18 +180,18 @@ namespace Analyzer
 			return false;
 		}
 
-		OutClassifiedStaticMeshes = OutClassifiedStaticMeshes.FilterByPredicate([](const TPair<int32, TArray<const FPreprocessedStaticMesh*>>& InKeyValuePair) {
+		OutClassifiedStaticMeshes = OutClassifiedStaticMeshes.FilterByPredicate([](const TPair<int32, TArray<const StaticMeshPreprocessor::FStaticMesh*>>& InKeyValuePair) {
 			return InKeyValuePair.Value.Num() >= 2;
-		});
+			});
 
 		return true;
 	}
 
-	void FPerVertexAnalyzer::AnalyzesSubset(const TArray<const FPreprocessedStaticMesh*>& InStaticMeshSubset, TArray<TArray<const FPreprocessedStaticMesh*>>& OutResults)const
+	void FPerVertexAnalyzer::AnalyzesSubset(const TArray<const StaticMeshPreprocessor::FStaticMesh*>& InStaticMeshSubset, TArray<TArray<const StaticMeshPreprocessor::FStaticMesh*>>& OutResults)const
 	{
-		TArray<TArray<const FPreprocessedStaticMesh*>> SubResult;
+		TArray<TArray<const StaticMeshPreprocessor::FStaticMesh*>> SubResult;
 
-		TSet<const FPreprocessedStaticMesh*> ProcessedIdenticalStaticMeshes;
+		TSet<const StaticMeshPreprocessor::FStaticMesh*> ProcessedIdenticalStaticMeshes;
 		for (int i = 0; i < InStaticMeshSubset.Num(); ++i)
 		{
 			if (ProcessedIdenticalStaticMeshes.Contains(InStaticMeshSubset[i]))
@@ -212,7 +199,7 @@ namespace Analyzer
 				continue;
 			}
 
-			TArray<const FPreprocessedStaticMesh*> SimilarGroup;
+			TArray<const StaticMeshPreprocessor::FStaticMesh*> SimilarGroup;
 			SimilarGroup.Add(InStaticMeshSubset[i]);
 
 			for (int j = i + 1; j < InStaticMeshSubset.Num(); ++j)
@@ -230,7 +217,7 @@ namespace Analyzer
 
 			if (SimilarGroup.Num() > 1)
 			{
-				for (const FPreprocessedStaticMesh* Mesh : SimilarGroup)
+				for (const StaticMeshPreprocessor::FStaticMesh* Mesh : SimilarGroup)
 				{
 					ProcessedIdenticalStaticMeshes.Add(Mesh);
 				}
@@ -241,10 +228,10 @@ namespace Analyzer
 		OutResults.Append(MoveTemp(SubResult));
 	}
 
-	bool FPerVertexAnalyzer::PerVertexCompareStaticMeshes(const FPreprocessedStaticMesh* A, const FPreprocessedStaticMesh* B)const
+	bool FPerVertexAnalyzer::PerVertexCompareStaticMeshes(const StaticMeshPreprocessor::FStaticMesh* A, const StaticMeshPreprocessor::FStaticMesh* B)const
 	{
-		const TArray<FPreprocessedPosition>& PositionBufferA = A->GetQuantizedPositionBuffer();
-		const TArray<FPreprocessedPosition>& PositionBufferB = B->GetQuantizedPositionBuffer();
+		const TArray<FInt64Vector3>& PositionBufferA = A->GetQuantizedPositionBuffer();
+		const TArray<FInt64Vector3>& PositionBufferB = B->GetQuantizedPositionBuffer();
 
 		const int32 NumberOfVertexA = PositionBufferA.Num();
 		const int32 NumberOfVertexB = PositionBufferB.Num();
@@ -292,7 +279,7 @@ namespace Analyzer
 					bIdentical.store(false, std::memory_order_relaxed);
 				}
 			}
-		};
+			};
 
 		ParallelFor(
 			TEXT("ParallelPerVertexCompareStaticMeshes"),
@@ -304,52 +291,51 @@ namespace Analyzer
 
 		return bIdentical;
 	}
-}
 
-bool AnalyzeMeshSimilarity(EAnalyzerType InAnalyzerType, const TArray<FPreprocessRegistry*>& InRegistries, FAnalyzeResults& OutResults)
-{
-	IMeshSimilarityAnalyzer* MeshSimilarityAnalyzer = nullptr;
-
-	switch (InAnalyzerType)
+	bool AnalyzeMeshSimilarity(EStaticMeshAnalyzerType InAnalyzerType, const TArray<StaticMeshPreprocessor::FRegistry*>& InRegistries, FStaticMeshAnalyzeResults& OutResults)
 	{
-	case EAnalyzerType::PerVertex:
-		MeshSimilarityAnalyzer = new FPerVertexAnalyzer();
-		break;
-	case EAnalyzerType::XxHash64:
-		MeshSimilarityAnalyzer = new FXxHash64Analyzer();
-		break;
-	case EAnalyzerType::XxHash128:
-		MeshSimilarityAnalyzer = new FXxHash128Analyzer();
-		break;
-	default:
-		check(0)
-		break;
-	}
+		IMeshSimilarityAnalyzer* MeshSimilarityAnalyzer = nullptr;
 
-	struct FScopeGuard
-	{
-		FScopeGuard(IMeshSimilarityAnalyzer* InMeshSimilarityAnalyzer)
+		switch (InAnalyzerType)
 		{
-			MeshSimilarityAnalyzer = InMeshSimilarityAnalyzer;
+		case EStaticMeshAnalyzerType::PerVertex:
+			MeshSimilarityAnalyzer = new FPerVertexAnalyzer();
+			break;
+		case EStaticMeshAnalyzerType::XxHash64:
+			MeshSimilarityAnalyzer = new TMemoryHashAnalyzer<FXxHash64>();
+			break;
+		case EStaticMeshAnalyzerType::XxHash128:
+			MeshSimilarityAnalyzer = new TMemoryHashAnalyzer<FXxHash128>();
+			break;
+		default:
+			check(0);
+			break;
 		}
-		~FScopeGuard()
+
+		struct FScopeGuard
 		{
-			if (MeshSimilarityAnalyzer)
+			FScopeGuard(IMeshSimilarityAnalyzer* InMeshSimilarityAnalyzer)
 			{
-				delete MeshSimilarityAnalyzer;
+				MeshSimilarityAnalyzer = InMeshSimilarityAnalyzer;
 			}
+			~FScopeGuard()
+			{
+				if (MeshSimilarityAnalyzer)
+				{
+					delete MeshSimilarityAnalyzer;
+				}
+			}
+
+			IMeshSimilarityAnalyzer* MeshSimilarityAnalyzer;
+		};
+
+		FScopeGuard Guard(MeshSimilarityAnalyzer);
+
+		if (!MeshSimilarityAnalyzer->Analyzes(InRegistries, OutResults))
+		{
+			return false;
 		}
 
-		IMeshSimilarityAnalyzer* MeshSimilarityAnalyzer;
-	};
-
-	FScopeGuard Guard(MeshSimilarityAnalyzer);
-
-	FAnalyzeResults Results;
-	if (!MeshSimilarityAnalyzer->Analyzes(InRegistries, OutResults))
-	{
-		return false;
+		return true;
 	}
-
-	return true;
 }

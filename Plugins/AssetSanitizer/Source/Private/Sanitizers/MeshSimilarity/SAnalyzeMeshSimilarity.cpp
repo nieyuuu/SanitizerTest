@@ -1,6 +1,6 @@
-#include "AnalyzeMeshSimilarityWidget.h"
+#include "SAnalyzeMeshSimilarity.h"
 
-#include "VisualizeMeshSimilarityWidget.h"
+#include "SVisualizeMeshSimilarity.h"
 
 #include "Widgets/SWindow.h"
 #include "Widgets/Input/SCheckBox.h"
@@ -27,13 +27,11 @@ struct FCompareFStaticMeshReportNodeByName
 	}
 };
 
-FStaticMeshReportNode::FStaticMeshReportNode(): CheckBoxState(ECheckBoxState::Undetermined), bShouldAnalyze(nullptr), bIsFolder(false), Parent(nullptr)
-{
-}
+FStaticMeshReportNode::FStaticMeshReportNode() : CheckBoxState(ECheckBoxState::Undetermined), bShouldAnalyze(nullptr), bIsFolder(false), Parent(nullptr)
+{}
 
-FStaticMeshReportNode::FStaticMeshReportNode(const FString& InNodeName, bool InIsFolder): NodeName(InNodeName), CheckBoxState(ECheckBoxState::Undetermined), bShouldAnalyze(nullptr), bIsFolder(InIsFolder), Parent(nullptr)
-{
-}
+FStaticMeshReportNode::FStaticMeshReportNode(const FString& InNodeName, bool InIsFolder) : NodeName(InNodeName), CheckBoxState(ECheckBoxState::Undetermined), bShouldAnalyze(nullptr), bIsFolder(InIsFolder), Parent(nullptr)
+{}
 
 void FStaticMeshReportNode::AddStaticMesh(const FString& InStaticMeshObjectPath, bool* InShouldAnalyze)
 {
@@ -122,141 +120,141 @@ void SAnalyzeMeshSimilarity::Construct(const FArguments& InArgs, TSharedPtr<TArr
 
 	ConstructNodeTree(InStaticMeshReportDatas);
 
-	AnalyzerTypeOptions.Add(MakeShared<EAnalyzerType>(EAnalyzerType::PerVertex));
-	AnalyzerTypeOptions.Add(MakeShared<EAnalyzerType>(EAnalyzerType::XxHash64));
-	AnalyzerTypeOptions.Add(MakeShared<EAnalyzerType>(EAnalyzerType::XxHash128));
-	
+	AnalyzerTypeOptions.Add(MakeShared<StaticMeshAnalyzer::EStaticMeshAnalyzerType>(StaticMeshAnalyzer::EStaticMeshAnalyzerType::PerVertex));
+	AnalyzerTypeOptions.Add(MakeShared<StaticMeshAnalyzer::EStaticMeshAnalyzerType>(StaticMeshAnalyzer::EStaticMeshAnalyzerType::XxHash64));
+	AnalyzerTypeOptions.Add(MakeShared<StaticMeshAnalyzer::EStaticMeshAnalyzerType>(StaticMeshAnalyzer::EStaticMeshAnalyzerType::XxHash128));
+
 	SelectedAnalyzerTypeOption = AnalyzerTypeOptions[0];
 
 	ChildSlot
-	[
-		SNew(SBorder)
-		.BorderImage(FAppStyle::GetBrush("Docking.Tab.ContentAreaBrush"))
-		.Padding(FMargin(4, 8, 4, 4))
 		[
-			//Quantization exponent
-			SNew(SVerticalBox)
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			.Padding(0, 0, 0, 4)
-			[
-				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot()
-				.FillWidth(1.f)
-				.VAlign(VAlign_Center)
+			SNew(SBorder)
+				.BorderImage(FAppStyle::GetBrush("Docking.Tab.ContentAreaBrush"))
+				.Padding(FMargin(4, 8, 4, 4))
 				[
-					SNew(SHorizontalBox)
-					+ SHorizontalBox::Slot()
-					.AutoWidth()
-					.VAlign(VAlign_Center)
-					[
-						SNew(STextBlock).Text(FText::FromString(TEXT("QuantizationExponent: ")))
-					]
-					+ SHorizontalBox::Slot()
-					.AutoWidth()
-					.VAlign(VAlign_Center)
-					[
-						SNew(SSpinBox<int32>)
-						.MinValue(MIN_EXPONENT)
-						.MaxValue(MAX_EXPONENT)
-						.MinSliderValue(MIN_EXPONENT)
-						.MaxSliderValue(MAX_EXPONENT)
-						.Delta(1)
-						.MinDesiredWidth(27)
-						.Value_Lambda([this]() {
-							return QuantizationExponent;
-						})
-						.OnValueChanged_Lambda([this](int32 InNewValue) {
-							QuantizationExponent = InNewValue;
-						})
-					]
-				]
-				//Analyzer type
-				+ SHorizontalBox::Slot()
-				.FillWidth(1.f)
-				.HAlign(HAlign_Right)
-				.VAlign(VAlign_Center)
-				[
-					SNew(SHorizontalBox)
-					+ SHorizontalBox::Slot()
-					.AutoWidth()
-					.VAlign(VAlign_Center)
-					[
-						SNew(STextBlock).Text(FText::FromString(TEXT("AnalyzerType: ")))
-					]
-					+ SHorizontalBox::Slot()
-					.AutoWidth()
-					.VAlign(VAlign_Center)
-					[
-						SNew(SComboBox<TSharedPtr<EAnalyzerType>>)
-						.OptionsSource(&AnalyzerTypeOptions)
-						.OnSelectionChanged_Lambda([this](TSharedPtr<EAnalyzerType> InNewSelection, ESelectInfo::Type) {
-							SelectedAnalyzerTypeOption = InNewSelection;
-						})
-						.OnGenerateWidget_Lambda([](TSharedPtr<EAnalyzerType> InOption) {
-							return SNew(STextBlock).Text(FText::FromString(AnalyzerTypeToString(*InOption)));
-						})
-						.InitiallySelectedItem(SelectedAnalyzerTypeOption)
+					//Quantization exponent
+					SNew(SVerticalBox)
+						+ SVerticalBox::Slot()
+						.AutoHeight()
+						.Padding(0, 0, 0, 4)
 						[
-							SNew(STextBlock).Text_Lambda([this]() {
-								return FText::FromString(AnalyzerTypeToString(*SelectedAnalyzerTypeOption));
-							})
+							SNew(SHorizontalBox)
+								+ SHorizontalBox::Slot()
+								.FillWidth(1.f)
+								.VAlign(VAlign_Center)
+								[
+									SNew(SHorizontalBox)
+										+ SHorizontalBox::Slot()
+										.AutoWidth()
+										.VAlign(VAlign_Center)
+										[
+											SNew(STextBlock).Text(FText::FromString(TEXT("QuantizationExponent: ")))
+										]
+										+ SHorizontalBox::Slot()
+										.AutoWidth()
+										.VAlign(VAlign_Center)
+										[
+											SNew(SSpinBox<int32>)
+												.MinValue(MIN_EXPONENT)
+												.MaxValue(MAX_EXPONENT)
+												.MinSliderValue(MIN_EXPONENT)
+												.MaxSliderValue(MAX_EXPONENT)
+												.Delta(1)
+												.MinDesiredWidth(27)
+												.Value_Lambda([this]() {
+												return QuantizationExponent;
+													})
+												.OnValueChanged_Lambda([this](int32 InNewValue) {
+												QuantizationExponent = InNewValue;
+													})
+										]
+								]
+							//StaticMeshAnalyzer type
+							+ SHorizontalBox::Slot()
+								.FillWidth(1.f)
+								.HAlign(HAlign_Right)
+								.VAlign(VAlign_Center)
+								[
+									SNew(SHorizontalBox)
+										+ SHorizontalBox::Slot()
+										.AutoWidth()
+										.VAlign(VAlign_Center)
+										[
+											SNew(STextBlock).Text(FText::FromString(TEXT("AnalyzerType: ")))
+										]
+										+ SHorizontalBox::Slot()
+										.AutoWidth()
+										.VAlign(VAlign_Center)
+										[
+											SNew(SComboBox<TSharedPtr<StaticMeshAnalyzer::EStaticMeshAnalyzerType>>)
+												.OptionsSource(&AnalyzerTypeOptions)
+												.OnSelectionChanged_Lambda([this](TSharedPtr<StaticMeshAnalyzer::EStaticMeshAnalyzerType> InNewSelection, ESelectInfo::Type) {
+												SelectedAnalyzerTypeOption = InNewSelection;
+													})
+												.OnGenerateWidget_Lambda([](TSharedPtr<StaticMeshAnalyzer::EStaticMeshAnalyzerType> InOption) {
+												return SNew(STextBlock).Text(UEnum::GetDisplayValueAsText(*InOption));
+													})
+												.InitiallySelectedItem(SelectedAnalyzerTypeOption)
+												[
+													SNew(STextBlock).Text_Lambda([this]() {
+														return UEnum::GetDisplayValueAsText(*SelectedAnalyzerTypeOption);
+														})
+												]
+										]
+								]
 						]
-					]
+					//Tool tip message
+					+ SVerticalBox::Slot()
+						.AutoHeight()
+						.Padding(0, 4)
+						[
+							SNew(STextBlock)
+								.Text(LOCTEXT("AnalyzeReportTitle", "The following static meshes will be analyzed with the given parameters."))
+								.TextStyle(FAppStyle::Get(), "PackageMigration.DialogTitle")
+						]
+						//Tree view
+						+ SVerticalBox::Slot()
+						.FillHeight(1.f)
+						[
+							SNew(SBorder)
+								.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
+								[
+									SAssignNew(TreeView, FStaticMeshReportTree)
+										.TreeItemsSource(&RootNode.Children)
+										.SelectionMode(ESelectionMode::Single)
+										.OnGenerateRow(this, &SAnalyzeMeshSimilarity::GenerateTreeRow)
+										.OnGetChildren(this, &SAnalyzeMeshSimilarity::GetChildrenForNode)
+								]
+						]
+					//OK/Cancel button
+					+ SVerticalBox::Slot()
+						.AutoHeight()
+						.HAlign(HAlign_Right)
+						.Padding(0, 4, 0, 0)
+						[
+							SNew(SUniformGridPanel)
+								.SlotPadding(FAppStyle::GetMargin("StandardDialog.SlotPadding"))
+								.MinDesiredSlotWidth(FAppStyle::GetFloat("StandardDialog.MinDesiredSlotWidth"))
+								.MinDesiredSlotHeight(FAppStyle::GetFloat("StandardDialog.MinDesiredSlotHeight"))
+								+ SUniformGridPanel::Slot(0, 0)
+								[
+									SNew(SButton)
+										.HAlign(HAlign_Center)
+										.ContentPadding(FAppStyle::GetMargin("StandardDialog.ContentPadding"))
+										.OnClicked(this, &SAnalyzeMeshSimilarity::OnOkClicked)
+										.Text(LOCTEXT("OkButton", "OK"))
+								]
+							+ SUniformGridPanel::Slot(1, 0)
+								[
+									SNew(SButton)
+										.HAlign(HAlign_Center)
+										.ContentPadding(FAppStyle::GetMargin("StandardDialog.ContentPadding"))
+										.OnClicked(this, &SAnalyzeMeshSimilarity::OnCancelClicked)
+										.Text(LOCTEXT("CancelButton", "Cancel"))
+								]
+						]
 				]
-			]
-			//Tool tip message
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			.Padding(0, 4)
-			[
-				SNew(STextBlock)
-				.Text(LOCTEXT("AnalyzeReportTitle", "The following static meshes will be analyzed with the given parameters."))
-				.TextStyle(FAppStyle::Get(), "PackageMigration.DialogTitle")
-			]
-			//Tree view
-			+ SVerticalBox::Slot()
-			.FillHeight(1.f)
-			[
-				SNew(SBorder)
-				.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
-				[
-					SAssignNew(TreeView, FStaticMeshReportTree)
-					.TreeItemsSource(&RootNode.Children)
-					.SelectionMode(ESelectionMode::Single)
-					.OnGenerateRow(this, &SAnalyzeMeshSimilarity::GenerateTreeRow)
-					.OnGetChildren(this, &SAnalyzeMeshSimilarity::GetChildrenForNode)
-				]
-			]
-			//OK/Cancel button
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			.HAlign(HAlign_Right)
-			.Padding(0, 4, 0, 0)
-			[
-				SNew(SUniformGridPanel)
-				.SlotPadding(FAppStyle::GetMargin("StandardDialog.SlotPadding"))
-				.MinDesiredSlotWidth(FAppStyle::GetFloat("StandardDialog.MinDesiredSlotWidth"))
-				.MinDesiredSlotHeight(FAppStyle::GetFloat("StandardDialog.MinDesiredSlotHeight"))
-				+ SUniformGridPanel::Slot(0, 0)
-				[
-					SNew(SButton)
-					.HAlign(HAlign_Center)
-					.ContentPadding(FAppStyle::GetMargin("StandardDialog.ContentPadding"))
-					.OnClicked(this, &SAnalyzeMeshSimilarity::OnOkClicked)
-					.Text(LOCTEXT("OkButton", "OK"))
-				]
-				+ SUniformGridPanel::Slot(1, 0)
-				[
-					SNew(SButton)
-					.HAlign(HAlign_Center)
-					.ContentPadding(FAppStyle::GetMargin("StandardDialog.ContentPadding"))
-					.OnClicked(this, &SAnalyzeMeshSimilarity::OnCancelClicked)
-					.Text(LOCTEXT("CancelButton", "Cancel"))
-				]
-			]
-		]
-	];
+		];
 
 	//Expand after construct
 	if (ensure(TreeView.IsValid()))
@@ -316,25 +314,25 @@ TSharedRef<ITableRow> SAnalyzeMeshSimilarity::GenerateTreeRow(TSharedPtr<FStatic
 		[
 			//Icon
 			SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot()
-			.AutoWidth()
-			[
-				SNew(SCheckBox)
-				.OnCheckStateChanged(this, &SAnalyzeMeshSimilarity::OnCheckBoxStateChanged, InTreeItem, InOwnerTable)
-				.IsChecked(this, &SAnalyzeMeshSimilarity::GetCheckBoxStateForNode, InTreeItem)
-			]
-			+ SHorizontalBox::Slot()
-			.AutoWidth()
-			[
-				SNew(SImage).Image(IconBrush)
-			]
-			//Node Name
-			+ SHorizontalBox::Slot()
-			.FillWidth(1.f)
-			[
-				SNew(STextBlock).Text(FText::FromString(InTreeItem->NodeName))
-				.ColorAndOpacity(FSlateColor::UseForeground())
-			]
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				[
+					SNew(SCheckBox)
+						.OnCheckStateChanged(this, &SAnalyzeMeshSimilarity::OnCheckBoxStateChanged, InTreeItem, InOwnerTable)
+						.IsChecked(this, &SAnalyzeMeshSimilarity::GetCheckBoxStateForNode, InTreeItem)
+				]
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				[
+					SNew(SImage).Image(IconBrush)
+				]
+				//Node Name
+				+ SHorizontalBox::Slot()
+				.FillWidth(1.f)
+				[
+					SNew(STextBlock).Text(FText::FromString(InTreeItem->NodeName))
+						.ColorAndOpacity(FSlateColor::UseForeground())
+				]
 		];
 }
 
@@ -429,7 +427,7 @@ FReply SAnalyzeMeshSimilarity::OnOkClicked()
 
 	//Load static meshes
 	SlowTask.EnterProgressFrame(1, LOCTEXT("AnalyzeMeshSimilarity_LoadingStaticMeshes", "Loading Static Meshes..."));
-	
+
 	TSet<const UStaticMesh*> LoadedStaticMeshes;
 	TArray<UStaticMesh*> PendingCompilingStaticMeshes;
 	TArray<FString> FailedToLoadObjectPaths;
@@ -470,7 +468,7 @@ FReply SAnalyzeMeshSimilarity::OnOkClicked()
 
 	//Preprocess
 	SlowTask.EnterProgressFrame(1, LOCTEXT("AnalyzeMeshSimilarity_PreprocessingStaticMeshes", "Preprocessing Static Meshes..."));
-	TUniquePtr<FPreprocessRegistry> Registry = FPreprocessRegistry::PreprocessStaticMeshes(LoadedStaticMeshes, FPreprocessSettings(QuantizationExponent));
+	TUniquePtr<StaticMeshPreprocessor::FRegistry> Registry = StaticMeshPreprocessor::FRegistry::PreprocessStaticMeshes(LoadedStaticMeshes, StaticMeshPreprocessor::FSettings(QuantizationExponent));
 
 	//Perform a garbage collection
 	SlowTask.EnterProgressFrame(1, LOCTEXT("AnalyzeMeshSimilarity_CollectGarbage", "Collecting Garbage..."));
@@ -478,8 +476,8 @@ FReply SAnalyzeMeshSimilarity::OnOkClicked()
 
 	//Analyze
 	SlowTask.EnterProgressFrame(1, LOCTEXT("AnalyzeMeshSimilarity_AnalyzeMeshSimilarity", "Analyzing Static Mesh Similarity..."));
-	TSharedPtr<FAnalyzeResults> Results = MakeShared<FAnalyzeResults>();
-	if (!AnalyzeMeshSimilarity(*SelectedAnalyzerTypeOption, { Registry.Get() }, *Results))
+	TSharedPtr<StaticMeshAnalyzer::FStaticMeshAnalyzeResults> Results = MakeShared<StaticMeshAnalyzer::FStaticMeshAnalyzeResults>();
+	if (!StaticMeshAnalyzer::AnalyzeMeshSimilarity(*SelectedAnalyzerTypeOption, { Registry.Get() }, *Results))
 	{
 		FNotificationInfo Info(LOCTEXT("FailedToAnalyze", "Failed to analyze mesh similarity."));
 		Info.ExpireDuration = 5.0f;
@@ -489,7 +487,7 @@ FReply SAnalyzeMeshSimilarity::OnOkClicked()
 	{
 		for (const FString& ObjectPath : FailedToLoadObjectPaths)
 		{
-			Results.Get()->ObjectPathToErrorStatus.Add(ObjectPath, EPreprocessStatus::InvalidObjectPath);
+			Results.Get()->ObjectPathToErrorStatus.Add(ObjectPath, StaticMeshPreprocessor::EStaticMeshStatus::InvalidObjectPath);
 		}
 		SVisualizeMeshSimilarity::OpenVisualizeMeshSimilarityDialog(Results);
 	}

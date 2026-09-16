@@ -1,5 +1,6 @@
 #include "MeshSimilarityAnalyzeCommandlet.h"
 
+#include "LoadBalancer.h"
 #include "MeshSimilarityAnalyzer.h"
 
 #include "AssetCompilingManager.h"
@@ -132,20 +133,20 @@ int32 UMeshSimilarityAnalyzeCommandlet::Main(const FString& InCmdLineParams)
 	}
 	else if (Arguments[MODE] == ANALYZER)
 	{
-		EAnalyzerType AnalyzerType = EAnalyzerType::PerVertex;
+		StaticMeshAnalyzer::EStaticMeshAnalyzerType AnalyzerType = StaticMeshAnalyzer::EStaticMeshAnalyzerType::PerVertex;
 		if (Arguments.Contains(ANALYZER_TYPE))
 		{
 			if (Arguments[ANALYZER_TYPE] == TEXT("PerVertex"))
 			{
-				AnalyzerType = EAnalyzerType::PerVertex;
+				AnalyzerType = StaticMeshAnalyzer::EStaticMeshAnalyzerType::PerVertex;
 			}
 			else if (Arguments[ANALYZER_TYPE] == TEXT("XxHash64"))
 			{
-				AnalyzerType = EAnalyzerType::XxHash64;
+				AnalyzerType = StaticMeshAnalyzer::EStaticMeshAnalyzerType::XxHash64;
 			}
 			else if (Arguments[ANALYZER_TYPE] == TEXT("XxHash128"))
 			{
-				AnalyzerType = EAnalyzerType::XxHash128;
+				AnalyzerType = StaticMeshAnalyzer::EStaticMeshAnalyzerType::XxHash128;
 			}
 			else
 			{
@@ -194,14 +195,27 @@ int32 UMeshSimilarityAnalyzeCommandlet::Main(const FString& InCmdLineParams)
 
 int32 UMeshSimilarityAnalyzeCommandlet::RunBalancerMode(int32 InNumOfBatches, bool InConsiderDiskSize, const TArray<FString>& InDirectoriesToProcess, const FString& InOutputDir)
 {
+	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(AssetRegistryConstants::ModuleName);
+	IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
+	AssetRegistry.SearchAllAssets(true/* bSynchronousSearch */);
+
+	FARFilter Filter;
+	Filter.ClassPaths.Add(UStaticMesh::StaticClass()->GetClassPathName());
+	Filter.PackagePaths.Append(InDirectoriesToProcess);
+	Filter.bRecursivePaths = true;
+	Filter.bIncludeOnlyOnDiskAssets = true;
+
+	TArray<FAssetData> StaticMeshAssetDatas;
+	AssetRegistry.GetAssets(Filter, StaticMeshAssetDatas);
+
 	TArray<TArray<FString>> BalancedBatches;
 	if (InConsiderDiskSize)
 	{
-		BalancedBatches = FPreprocessBalancer::BalanceStaticMeshesBasedOnDiskSize(InDirectoriesToProcess, InNumOfBatches);
+		BalancedBatches = FLoadBalancer::BalanceAssets(StaticMeshAssetDatas, InNumOfBatches, FDefaultPayloadCalculator<true, true>{});
 	}
 	else
 	{
-		BalancedBatches = FPreprocessBalancer::BalanceStaticMeshes(InDirectoriesToProcess, InNumOfBatches);
+		BalancedBatches = FLoadBalancer::BalanceAssets(StaticMeshAssetDatas, InNumOfBatches, FDefaultPayloadCalculator<false, true>{});
 	}
 
 	for (int i = 0; i < BalancedBatches.Num(); ++i)
@@ -233,10 +247,10 @@ int32 UMeshSimilarityAnalyzeCommandlet::RunPreprocessorMode(int32 InQuantization
 		UniqueStaticMeshes.Add(StaticMeshesToProcess[i]);
 	}
 
-	FPreprocessSettings Settings(InQuantizationExponent);
-	TUniquePtr<FPreprocessRegistry> Registry = FPreprocessRegistry::PreprocessStaticMeshes(UniqueStaticMeshes, Settings);
+	StaticMeshPreprocessor::FSettings Settings(InQuantizationExponent);
+	TUniquePtr<StaticMeshPreprocessor::FRegistry> Registry = StaticMeshPreprocessor::FRegistry::PreprocessStaticMeshes(UniqueStaticMeshes, Settings);
 
-	if (!FPreprocessRegistry::SaveTo(Registry, InOutputFile))
+	if (!StaticMeshPreprocessor::FRegistry::SaveTo(Registry, InOutputFile))
 	{
 		UE_LOG(LogMeshSimilarityAnalyzeCommandlet, Error, TEXT("Failed to save preprocess registry to [%s]."), *InOutputFile);
 		return -1;
@@ -249,13 +263,13 @@ int32 UMeshSimilarityAnalyzeCommandlet::RunPreprocessorMode(int32 InQuantization
 	return 0;
 }
 
-int32 UMeshSimilarityAnalyzeCommandlet::RunAnalyzerMode(EAnalyzerType InAnalyzerType, const TArray<FString>& InRegistryPaths, const FString& InOutputFile)
+int32 UMeshSimilarityAnalyzeCommandlet::RunAnalyzerMode(StaticMeshAnalyzer::EStaticMeshAnalyzerType InAnalyzerType, const TArray<FString>& InRegistryPaths, const FString& InOutputFile)
 {
-	TArray<TUniquePtr<FPreprocessRegistry>> RegistryStorage;
+	TArray<TUniquePtr<StaticMeshPreprocessor::FRegistry>> RegistryStorage;
 	for (const FString& RegistryPath : InRegistryPaths)
 	{
-		TUniquePtr<FPreprocessRegistry> Registry;
-		if (!FPreprocessRegistry::LoadFrom(Registry, RegistryPath))
+		TUniquePtr<StaticMeshPreprocessor::FRegistry> Registry;
+		if (!StaticMeshPreprocessor::FRegistry::LoadFrom(Registry, RegistryPath))
 		{
 			UE_LOG(LogMeshSimilarityAnalyzeCommandlet, Error, TEXT("Failed to load registry from file [%s]"), *RegistryPath);
 			return -1;
@@ -263,19 +277,19 @@ int32 UMeshSimilarityAnalyzeCommandlet::RunAnalyzerMode(EAnalyzerType InAnalyzer
 		RegistryStorage.Add(MoveTemp(Registry));
 	}
 
-	TArray<FPreprocessRegistry*> Registries;
-	Algo::Transform(RegistryStorage, Registries, [](const TUniquePtr<FPreprocessRegistry>& InRegistry) {
+	TArray<StaticMeshPreprocessor::FRegistry*> Registries;
+	Algo::Transform(RegistryStorage, Registries, [](const TUniquePtr<StaticMeshPreprocessor::FRegistry>& InRegistry) {
 		return InRegistry.Get();
-	});
+		});
 
-	FAnalyzeResults Results;
-	if (!AnalyzeMeshSimilarity(InAnalyzerType, Registries, Results))
+	StaticMeshAnalyzer::FStaticMeshAnalyzeResults Results;
+	if (!StaticMeshAnalyzer::AnalyzeMeshSimilarity(InAnalyzerType, Registries, Results))
 	{
 		UE_LOG(LogMeshSimilarityAnalyzeCommandlet, Error, TEXT("Failed to analyze mesh similarity"));
 		return -1;
 	}
 
-	if (!FAnalyzeResults::SaveTo(Results, InOutputFile))
+	if (!StaticMeshAnalyzer::FStaticMeshAnalyzeResults::SaveTo(Results, InOutputFile))
 	{
 		UE_LOG(LogMeshSimilarityAnalyzeCommandlet, Error, TEXT("Failed to save final analyze results to [%s]"), *InOutputFile);
 		return -1;

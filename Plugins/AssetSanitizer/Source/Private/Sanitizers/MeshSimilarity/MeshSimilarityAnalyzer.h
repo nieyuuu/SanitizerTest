@@ -1,73 +1,70 @@
 #pragma once
 
-#include "PreprocessStaticMeshes.h"
+#include "MeshPreprocessor.h"
 
 #include "MeshSimilarityAnalyzer.generated.h"
 
-//Forward declare the friend functions
 uint32 GetTypeHash(const FXxHash64& InHash);
 uint32 GetTypeHash(const FXxHash128& InHash);
 
-UENUM()
-enum class EAnalyzerType :uint8
+namespace StaticMeshAnalyzer
 {
-	PerVertex,
-	XxHash64,
-	XxHash128
-};
+	UENUM()
+	enum class EStaticMeshAnalyzerType :uint8
+	{
+		PerVertex,
+		XxHash64,
+		XxHash128
+	};
 
-FString AnalyzerTypeToString(EAnalyzerType InType);
+	USTRUCT()
+	struct FStaticMeshSimilarGroup
+	{
+		GENERATED_BODY()
 
-USTRUCT()
-struct FSimilarGroup
-{
-	GENERATED_BODY()
+		UPROPERTY()
+		int32 NumOfVertices = 0;
 
-	UPROPERTY()
-	int32 NumOfVertices = 0;
+		UPROPERTY()
+		TArray<FSoftObjectPath> StaticMeshes;
+	};
 
-	UPROPERTY()
-	TArray<FSoftObjectPath> SimilarStaticMeshes;
-};
+	USTRUCT()
+	struct FStaticMeshAnalyzeResults
+	{
+		GENERATED_BODY()
 
-USTRUCT()
-struct FAnalyzeResults
-{
-	GENERATED_BODY()
+		UPROPERTY()
+		int32 QuantizationExponent = DEFAULT_EXPONENT;
 
-	UPROPERTY()
-	int32 QuantizationExponent = DEFAULT_EXPONENT;
+		UPROPERTY()
+		TArray<FStaticMeshSimilarGroup> SimilarGroups;
 
-	UPROPERTY()
-	TArray<FSimilarGroup> SimilarGroups;
+		UPROPERTY()
+		TMap<FString, StaticMeshPreprocessor::EStaticMeshStatus> ObjectPathToErrorStatus;
 
-	UPROPERTY()
-	TMap<FString, EPreprocessStatus> ObjectPathToErrorStatus;
+		//Save to disk eg. [D:\MyWorkspace\UnrealProjects\SanitizerTest\Saved\AnalyzeResults.json]
+		static bool SaveTo(FStaticMeshAnalyzeResults& InResults, const FString& InSaveFileName);
 
-	//Save to disk eg. [D:\MyWorkspace\UnrealProjects\SanitizerTest\Saved\AnalyzeResults.json]
-	static bool SaveTo(FAnalyzeResults& InResults, const FString& InSaveFileName);
+		//Load from disk eg. [D:\MyWorkspace\UnrealProjects\SanitizerTest\Saved\AnalyzeResults.json]
+		static bool LoadFrom(FStaticMeshAnalyzeResults& InResults, const FString& InLoadFileName);
+	};
 
-	//Load from disk eg. [D:\MyWorkspace\UnrealProjects\SanitizerTest\Saved\AnalyzeResults.json]
-	static bool LoadFrom(FAnalyzeResults& InResults, const FString& InLoadFileName);
-};
-
-namespace Analyzer
-{
 	class IMeshSimilarityAnalyzer
 	{
 	public:
 		IMeshSimilarityAnalyzer() = default;
 		virtual ~IMeshSimilarityAnalyzer() = default;
 
-		bool Analyzes(const TArray<FPreprocessRegistry*>& InRegistries, FAnalyzeResults& OutResults)const;
+		bool Analyzes(const TArray<StaticMeshPreprocessor::FRegistry*>& InRegistries, FStaticMeshAnalyzeResults& OutResults)const;
 
 	protected:
 		//Checks all registries' QuantizationExponent are equal and elements in all registries are unique.
 		//Classify static meshes by their vertex counts and filter those which have only one static mesh.
-		bool ClassifyStaticMeshes(const TArray<FPreprocessRegistry*>& InRegistries, TMap<int32, TArray<const FPreprocessedStaticMesh*>>& OutClassifiedStaticMeshes)const;
+		bool ClassifyStaticMeshes(const TArray<StaticMeshPreprocessor::FRegistry*>& InRegistries, TMap<int32, TArray<const StaticMeshPreprocessor::FStaticMesh*>>& OutClassifiedStaticMeshes)const;
 
 		//Analyze a subset of the classified static meshes which have same number of vertices.
-		virtual void AnalyzesSubset(const TArray<const FPreprocessedStaticMesh*>& InStaticMeshSubset, TArray<TArray<const FPreprocessedStaticMesh*>>& OutResults)const = 0;
+		virtual void AnalyzesSubset(const TArray<const StaticMeshPreprocessor::FStaticMesh*>& InStaticMeshSubset, TArray<TArray<const StaticMeshPreprocessor::FStaticMesh*>>& OutResults)const = 0;
 	};
 
 	class FPerVertexAnalyzer :public IMeshSimilarityAnalyzer
@@ -76,9 +73,9 @@ namespace Analyzer
 		FPerVertexAnalyzer() = default;
 
 	private:
-		virtual void AnalyzesSubset(const TArray<const FPreprocessedStaticMesh*>& InStaticMeshSubset, TArray<TArray<const FPreprocessedStaticMesh*>>& OutResults)const override;
+		virtual void AnalyzesSubset(const TArray<const StaticMeshPreprocessor::FStaticMesh*>& InStaticMeshSubset, TArray<TArray<const StaticMeshPreprocessor::FStaticMesh*>>& OutResults)const override;
 
-		bool PerVertexCompareStaticMeshes(const FPreprocessedStaticMesh* A, const FPreprocessedStaticMesh* B)const;
+		bool PerVertexCompareStaticMeshes(const StaticMeshPreprocessor::FStaticMesh* A, const StaticMeshPreprocessor::FStaticMesh* B)const;
 	};
 
 	namespace MemoryHashPrivate
@@ -110,8 +107,8 @@ namespace Analyzer
 			inline bool operator<(const TKey<FHashType>& InOther) const
 			{
 				return Exponent != InOther.Exponent ? Exponent < InOther.Exponent :
-					   NumOfVertices != InOther.NumOfVertices ? NumOfVertices < InOther.NumOfVertices :
-					   Hash < InOther.Hash;
+					NumOfVertices != InOther.NumOfVertices ? NumOfVertices < InOther.NumOfVertices :
+					Hash < InOther.Hash;
 			}
 		};
 
@@ -124,7 +121,7 @@ namespace Analyzer
 		template<typename FHashType>
 		inline TKey<FHashType> MakeKey(int32 InExponent, int32 InNumOfVertex, const void* InRawData)
 		{
-			FHashType Hash = FHashType::HashBuffer(InRawData, InNumOfVertex * sizeof(FPreprocessedPosition));
+			FHashType Hash = FHashType::HashBuffer(InRawData, InNumOfVertex * sizeof(FInt64Vector3));
 			return TKey<FHashType>::Construct(InExponent, InNumOfVertex, Hash);
 		}
 
@@ -134,7 +131,7 @@ namespace Analyzer
 			struct TMemoryHashResult
 			{
 				TKey<FHashType> Key;
-				const FPreprocessedStaticMesh* StaticMesh = nullptr;
+				const StaticMeshPreprocessor::FStaticMesh* StaticMesh = nullptr;
 			};
 
 			TArray<TMemoryHashContext<FHashType>::TMemoryHashResult> ResultsInThisContext;
@@ -148,16 +145,16 @@ namespace Analyzer
 		TMemoryHashAnalyzer() = default;
 
 	protected:
-		virtual void AnalyzesSubset(const TArray<const FPreprocessedStaticMesh*>& InStaticMeshSubset, TArray<TArray<const FPreprocessedStaticMesh*>>& OutResults)const override
+		virtual void AnalyzesSubset(const TArray<const StaticMeshPreprocessor::FStaticMesh*>& InStaticMeshSubset, TArray<TArray<const StaticMeshPreprocessor::FStaticMesh*>>& OutResults)const override
 		{
 			TArray<MemoryHashPrivate::TMemoryHashContext<FHashType>> Contexts;
 
 			auto LoopBody = [&](MemoryHashPrivate::TMemoryHashContext<FHashType>& Context, int32 Index) {
 				FTaskTagScope TaskTag(ETaskTag::EParallelGameThread);
 
-				const FPreprocessedStaticMesh* StaticMesh = InStaticMeshSubset[Index];
+				const StaticMeshPreprocessor::FStaticMesh* StaticMesh = InStaticMeshSubset[Index];
 				const int32 Exponent = StaticMesh->GetQuantizationExponent();
-				const TArray<FPreprocessedPosition>& QuantizedPositionBuffer = StaticMesh->GetQuantizedPositionBuffer();
+				const TArray<FInt64Vector3>& QuantizedPositionBuffer = StaticMesh->GetQuantizedPositionBuffer();
 
 				using MemoryHashResultType = MemoryHashPrivate::TMemoryHashContext<FHashType>::TMemoryHashResult;
 				MemoryHashResultType HashResult{};
@@ -165,7 +162,7 @@ namespace Analyzer
 				HashResult.StaticMesh = StaticMesh;
 
 				Context.ResultsInThisContext.Add(HashResult);
-			};
+				};
 
 			ParallelForWithTaskContext(
 				TEXT("ParallelMemoryHashStaticMeshes"),
@@ -176,7 +173,7 @@ namespace Analyzer
 				EParallelForFlags::None
 			);
 
-			TMap<MemoryHashPrivate::TKey<FHashType>, TArray<const FPreprocessedStaticMesh*>> HashMap;
+			TMap<MemoryHashPrivate::TKey<FHashType>, TArray<const StaticMeshPreprocessor::FStaticMesh*>> HashMap;
 			for (const auto& Context : Contexts)
 			{
 				for (const auto& Result : Context.ResultsInThisContext)
@@ -185,13 +182,13 @@ namespace Analyzer
 				}
 			}
 
-			for (TPair<MemoryHashPrivate::TKey<FHashType>, TArray<const FPreprocessedStaticMesh*>>& Iterator : HashMap)
+			for (TPair<MemoryHashPrivate::TKey<FHashType>, TArray<const StaticMeshPreprocessor::FStaticMesh*>>& Iterator : HashMap)
 			{
 				if (Iterator.Value.Num() >= 2)
 				{
 					//Add anyway but warn if bounding boxes not matching
 					OutResults.Add(Iterator.Value);
-					
+
 					const FBox& BoundingBox = Iterator.Value[0]->GetBoundingBox();
 					bool bAllMatching = true;
 
@@ -217,11 +214,6 @@ namespace Analyzer
 			}
 		}
 	};
+
+	bool AnalyzeMeshSimilarity(EStaticMeshAnalyzerType InAnalyzerType, const TArray<StaticMeshPreprocessor::FRegistry*>& InRegistries, FStaticMeshAnalyzeResults& OutResults);
 }
-
-bool AnalyzeMeshSimilarity(EAnalyzerType InAnalyzerType, const TArray<FPreprocessRegistry*>& InRegistries, FAnalyzeResults& OutResults);
-
-typedef Analyzer::IMeshSimilarityAnalyzer		  IMeshSimilarityAnalyzer;
-typedef Analyzer::FPerVertexAnalyzer			  FPerVertexAnalyzer;
-typedef Analyzer::TMemoryHashAnalyzer<FXxHash64>  FXxHash64Analyzer;
-typedef Analyzer::TMemoryHashAnalyzer<FXxHash128> FXxHash128Analyzer;

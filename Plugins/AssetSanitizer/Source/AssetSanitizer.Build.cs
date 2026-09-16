@@ -6,6 +6,8 @@ public class AssetSanitizer : ModuleRules
     {
         PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
+        bAllowUETypesInNamespaces = true;
+
         PublicIncludePaths.AddRange(new string[] { });
         PrivateIncludePaths.AddRange(new string[] { });
 
