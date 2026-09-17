@@ -6,16 +6,13 @@
 #include "Math/MathFwd.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 
-#include "MeshPreprocessor.generated.h"
-
-constexpr int32 MIN_EXPONENT	 = -2;
-constexpr int32 MAX_EXPONENT	 = 7;
+constexpr int32 MIN_EXPONENT = -2;
+constexpr int32 MAX_EXPONENT = 7;
 constexpr int32 DEFAULT_EXPONENT = 0;
 
 namespace StaticMeshPreprocessor
 {
-	UENUM()
-	enum class EStaticMeshStatus :uint8
+	enum class EStatus :uint8
 	{
 		Unknown,
 		NoError,
@@ -24,6 +21,8 @@ namespace StaticMeshPreprocessor
 		MeshDescriptionNotFound,
 		PositionBufferContainsNaN
 	};
+
+	FString StatusToString(EStatus InStatus);
 
 	struct FSettings
 	{
@@ -169,9 +168,9 @@ namespace StaticMeshPreprocessor
 		}
 
 		//Get the status of a static mesh in this registry
-		EStaticMeshStatus GetStatusInThisRegistry(const FString& InStaticMeshObjectPath)const;
+		EStatus GetStatusInThisRegistry(const FString& InStaticMeshObjectPath)const;
 
-		inline const TMap<FString, EStaticMeshStatus>& GetObjectPathToErrorStatus()const
+		inline const TMap<FString, EStatus>& GetObjectPathToErrorStatus()const
 		{
 			return ObjectPathToErrorStatus;
 		}
@@ -263,8 +262,8 @@ namespace StaticMeshPreprocessor
 		FString FileName;
 		//FString is default case insensitive but this might be ok because there cant be two assets SM_Asset/SM_asset under same folder
 		//And there cant be two sub-folsers Folder/folder under same folder
-		//TMap<FString, EStaticMeshStatus, FDefaultSetAllocator, FLocKeyMapFuncs<EStaticMeshStatus>> will handle case sensitive of FString
-		TMap<FString, EStaticMeshStatus> ObjectPathToErrorStatus;
+		//TMap<FString, EStatus, FDefaultSetAllocator, FLocKeyMapFuncs<EStatus>> will handle case sensitive of FString
+		TMap<FString, EStatus> ObjectPathToErrorStatus;
 		TArray<FStaticMesh*> ProcessedStaticMeshes;
 
 		//Allocate an instance of FStaticMesh and set its QuantizationExponent

@@ -2,61 +2,66 @@
 
 #include "MeshPreprocessor.h"
 
-#include "MeshSimilarityAnalyzer.generated.h"
-
 uint32 GetTypeHash(const FXxHash64& InHash);
 uint32 GetTypeHash(const FXxHash128& InHash);
 
 namespace StaticMeshAnalyzer
 {
-	UENUM()
-	enum class EStaticMeshAnalyzerType :uint8
+	enum class EType :uint8
 	{
 		PerVertex,
 		XxHash64,
 		XxHash128
 	};
 
-	USTRUCT()
-	struct FStaticMeshSimilarGroup
-	{
-		GENERATED_BODY()
+	FString TypeToString(EType InType);
 
-		UPROPERTY()
+	struct FSimilarGroup
+	{
 		int32 NumOfVertices = 0;
 
-		UPROPERTY()
-		TArray<FSoftObjectPath> StaticMeshes;
+		TArray<FString> StaticMeshes;
+
+		friend FArchive& operator<<(FArchive& InAr, FSimilarGroup& InGroup)
+		{
+			InAr << InGroup.NumOfVertices;
+			InAr << InGroup.StaticMeshes;
+
+			return InAr;
+		}
 	};
 
-	USTRUCT()
-	struct FStaticMeshAnalyzeResults
+	struct FAnalyzeResults
 	{
-		GENERATED_BODY()
-
-		UPROPERTY()
 		int32 QuantizationExponent = DEFAULT_EXPONENT;
 
-		UPROPERTY()
-		TArray<FStaticMeshSimilarGroup> SimilarGroups;
+		TArray<FSimilarGroup> SimilarGroups;
 
-		UPROPERTY()
-		TMap<FString, StaticMeshPreprocessor::EStaticMeshStatus> ObjectPathToErrorStatus;
+		TMap<FString, StaticMeshPreprocessor::EStatus> ObjectPathToErrorStatus;
 
-		//Save to disk eg. [D:\MyWorkspace\UnrealProjects\SanitizerTest\Saved\AnalyzeResults.json]
-		static bool SaveTo(FStaticMeshAnalyzeResults& InResults, const FString& InSaveFileName);
+		//Save to disk eg. [D:\MyWorkspace\UnrealProjects\SanitizerTest\Saved\AnalyzeResults.bin]
+		static bool SaveTo(FAnalyzeResults& InResults, const FString& InSaveFileName);
 
-		//Load from disk eg. [D:\MyWorkspace\UnrealProjects\SanitizerTest\Saved\AnalyzeResults.json]
-		static bool LoadFrom(FStaticMeshAnalyzeResults& InResults, const FString& InLoadFileName);
+		//Load from disk eg. [D:\MyWorkspace\UnrealProjects\SanitizerTest\Saved\AnalyzeResults.bin]
+		static bool LoadFrom(FAnalyzeResults& InResults, const FString& InLoadFileName);
+
+		friend FArchive& operator<<(FArchive& InAr, FAnalyzeResults& InResults)
+		{
+			InAr << InResults.QuantizationExponent;
+			InAr << InResults.SimilarGroups;
+			InAr << InResults.ObjectPathToErrorStatus;
+
+			return InAr;
+		}
 	};
 
-	class IMeshSimilarityAnalyzer
+	class ISimilarityAnalyzer
 	{
 	public:
-		IMeshSimilarityAnalyzer() = default;
-		virtual ~IMeshSimilarityAnalyzer() = default;
+		ISimilarityAnalyzer() = default;
+		virtual ~ISimilarityAnalyzer() = default;
 
-		bool Analyzes(const TArray<StaticMeshPreprocessor::FRegistry*>& InRegistries, FStaticMeshAnalyzeResults& OutResults)const;
+		bool Analyzes(const TArray<StaticMeshPreprocessor::FRegistry*>& InRegistries, FAnalyzeResults& OutResults)const;
 
 	protected:
 		//Checks all registries' QuantizationExponent are equal and elements in all registries are unique.
@@ -67,7 +72,7 @@ namespace StaticMeshAnalyzer
 		virtual void AnalyzesSubset(const TArray<const StaticMeshPreprocessor::FStaticMesh*>& InStaticMeshSubset, TArray<TArray<const StaticMeshPreprocessor::FStaticMesh*>>& OutResults)const = 0;
 	};
 
-	class FPerVertexAnalyzer :public IMeshSimilarityAnalyzer
+	class FPerVertexAnalyzer :public ISimilarityAnalyzer
 	{
 	public:
 		FPerVertexAnalyzer() = default;
@@ -139,7 +144,7 @@ namespace StaticMeshAnalyzer
 	}
 
 	template<typename FHashType>
-	class TMemoryHashAnalyzer :public IMeshSimilarityAnalyzer
+	class TMemoryHashAnalyzer :public ISimilarityAnalyzer
 	{
 	public:
 		TMemoryHashAnalyzer() = default;
@@ -215,5 +220,5 @@ namespace StaticMeshAnalyzer
 		}
 	};
 
-	bool AnalyzeMeshSimilarity(EStaticMeshAnalyzerType InAnalyzerType, const TArray<StaticMeshPreprocessor::FRegistry*>& InRegistries, FStaticMeshAnalyzeResults& OutResults);
+	bool AnalyzeMeshSimilarity(EType InAnalyzerType, const TArray<StaticMeshPreprocessor::FRegistry*>& InRegistries, FAnalyzeResults& OutResults);
 }

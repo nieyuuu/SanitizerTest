@@ -18,11 +18,11 @@
 #define LOCTEXT_NAMESPACE "SVisualizeMeshSimilarity"
 
 BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION
-void SVisualizeMeshSimilarity::Construct(const FArguments& InArgs, TSharedPtr<StaticMeshAnalyzer::FStaticMeshAnalyzeResults> InResults)
+void SVisualizeMeshSimilarity::Construct(const FArguments& InArgs, TSharedPtr<StaticMeshAnalyzer::FAnalyzeResults> InResults)
 {
 	if (InResults.Get() == nullptr)
 	{
-		InResults = MakeShared<StaticMeshAnalyzer::FStaticMeshAnalyzeResults>();
+		InResults = MakeShared<StaticMeshAnalyzer::FAnalyzeResults>();
 	}
 
 	AnalyzeResults = InResults;
@@ -163,7 +163,7 @@ void SVisualizeMeshSimilarity::Construct(const FArguments& InArgs, TSharedPtr<St
 }
 END_SLATE_FUNCTION_BUILD_OPTIMIZATION
 
-void SVisualizeMeshSimilarity::OpenVisualizeMeshSimilarityDialog(TSharedPtr<StaticMeshAnalyzer::FStaticMeshAnalyzeResults> InResults)
+void SVisualizeMeshSimilarity::OpenVisualizeMeshSimilarityDialog(TSharedPtr<StaticMeshAnalyzer::FAnalyzeResults> InResults)
 {
 	TSharedRef<SWindow> VisualizeMeshSimilarityWindow = SNew(SWindow)
 		.Title(LOCTEXT("VisualizeMeshSimilarityTitle", "Mesh Similarity Analyze Results"))
@@ -200,13 +200,13 @@ void SVisualizeMeshSimilarity::ReCacheListViewSources()
 	CachedSimilarGroupSource.Empty(AnalyzeResults->SimilarGroups.Num());
 	CachedErrorStatusSource.Empty(AnalyzeResults->ObjectPathToErrorStatus.Num());
 
-	for (const StaticMeshAnalyzer::FStaticMeshSimilarGroup& SimilarGroup : AnalyzeResults->SimilarGroups)
+	for (const StaticMeshAnalyzer::FSimilarGroup& SimilarGroup : AnalyzeResults->SimilarGroups)
 	{
 		TSharedPtr<FSimilarGroupEntry> Entry = MakeShared<FSimilarGroupEntry>();
 		Entry->SimilarGroup = &SimilarGroup;
 		CachedSimilarGroupSource.Add(Entry);
 	}
-	for (const TPair<FString, StaticMeshPreprocessor::EStaticMeshStatus>& Pair : AnalyzeResults->ObjectPathToErrorStatus)
+	for (const TPair<FString, StaticMeshPreprocessor::EStatus>& Pair : AnalyzeResults->ObjectPathToErrorStatus)
 	{
 		TSharedPtr<FErrorStatusEntry> Entry = MakeShared<FErrorStatusEntry>();
 		Entry->ObjectPath = &Pair.Key;
@@ -261,7 +261,7 @@ TSharedRef<ITableRow> SVisualizeMeshSimilarity::GenerateSimilarGroupRow(TSharedP
 {
 	const int32 GroupIndex = CachedSimilarGroupSource.IndexOfByKey(InSimilarGroupEntry);
 
-	return SNew(STableRow<TSharedPtr<StaticMeshAnalyzer::FStaticMeshSimilarGroup>>, InOwnerTable)
+	return SNew(STableRow<TSharedPtr<StaticMeshAnalyzer::FSimilarGroup>>, InOwnerTable)
 		.Padding(3)
 		[
 			SNew(SBorder)
@@ -308,14 +308,14 @@ TSharedRef<ITableRow> SVisualizeMeshSimilarity::GenerateSimilarGroupRow(TSharedP
 		];
 }
 
-TSharedRef<SWidget> SVisualizeMeshSimilarity::ConstructMeshThumbnailPreview(const TArray<FSoftObjectPath>& InMeshObjectPaths)
+TSharedRef<SWidget> SVisualizeMeshSimilarity::ConstructMeshThumbnailPreview(const TArray<FString>& InMeshObjectPaths)
 {
 	TSharedPtr<SWrapBox> ThumbnailContainer = SNew(SWrapBox).UseAllottedSize(true).InnerSlotPadding(FVector2D(5, 5));
 	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(AssetRegistryConstants::ModuleName);
 
-	for (const FSoftObjectPath& ObjectPath : InMeshObjectPaths)
+	for (const FString& ObjectPath : InMeshObjectPaths)
 	{
-		FAssetData AssetData = AssetRegistryModule.Get().GetAssetByObjectPath(ObjectPath);
+		FAssetData AssetData = AssetRegistryModule.Get().GetAssetByObjectPath(FSoftObjectPath(ObjectPath));
 		TSharedPtr<FAssetThumbnail> AssetThumbnail = MakeShareable(new FAssetThumbnail(AssetData, 128, 128, ThumbnailPool));
 
 		AssetThumbnail->SetRealTime(false);
@@ -343,7 +343,7 @@ TSharedRef<SWidget> SVisualizeMeshSimilarity::ConstructMeshThumbnailPreview(cons
 									.WidthOverride(64)
 									[
 										SNew(SHyperlink)
-											.Text(FText::FromString(FPaths::GetBaseFilename(ObjectPath.ToString())))
+											.Text(FText::FromString(FPaths::GetBaseFilename(ObjectPath)))
 											.OnNavigate_Lambda([ObjectPath]() {
 											FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(AssetRegistryConstants::ModuleName);
 											FAssetData AssetData = AssetRegistryModule.Get().GetAssetByObjectPath(ObjectPath);
@@ -358,7 +358,7 @@ TSharedRef<SWidget> SVisualizeMeshSimilarity::ConstructMeshThumbnailPreview(cons
 												FSlateNotificationManager::Get().AddNotification(Info);
 											}
 												})
-											.ToolTipText(FText::FromString(ObjectPath.ToString()))
+											.ToolTipText(FText::FromString(ObjectPath))
 									]
 							]
 					]
@@ -392,7 +392,7 @@ TSharedRef<ITableRow> SVisualizeMeshSimilarity::GenerateErrorStatusRow(TSharedPt
 						.AutoWidth()
 						[
 							SNew(SEditableText)
-								.Text(UEnum::GetDisplayValueAsText(InErrorStatusEntry->Status))
+								.Text(FText::FromString(StaticMeshPreprocessor::StatusToString(InErrorStatusEntry->Status)))
 								.IsReadOnly(true)
 						]
 				]
@@ -410,13 +410,13 @@ FReply SVisualizeMeshSimilarity::OnSaveClicked()
 			LOCTEXT("SaveDialogTitle", "Save Analyze Results").ToString(),
 			FPaths::ProjectSavedDir(),
 			TEXT(""),
-			TEXT("JSON files (*.json)|*.json"),
+			TEXT("BIN files (*.bin)|*.bin"),
 			EFileDialogFlags::None,
 			SaveFilenames);
 
 		if (bSaved && SaveFilenames.Num() > 0)
 		{
-			if (StaticMeshAnalyzer::FStaticMeshAnalyzeResults::SaveTo(*AnalyzeResults, SaveFilenames[0]))
+			if (StaticMeshAnalyzer::FAnalyzeResults::SaveTo(*AnalyzeResults, SaveFilenames[0]))
 			{
 				FNotificationInfo Info(FText::Format(LOCTEXT("SaveSuccess", "Results saved to: {0}"), FText::FromString(SaveFilenames[0])));
 				Info.ExpireDuration = 5.0f;
@@ -444,14 +444,14 @@ FReply SVisualizeMeshSimilarity::OnLoadClicked()
 			LOCTEXT("LoadDialogTitle", "Load Analyze Results").ToString(),
 			FPaths::ProjectSavedDir(),
 			TEXT(""),
-			TEXT("JSON files (*.json)|*.json"),
+			TEXT("BIN files (*.bin)|*.bin"),
 			EFileDialogFlags::None,
 			OpenFilenames);
 
 		if (bOpened && OpenFilenames.Num() > 0)
 		{
-			TSharedPtr<StaticMeshAnalyzer::FStaticMeshAnalyzeResults> NewResults = MakeShared<StaticMeshAnalyzer::FStaticMeshAnalyzeResults>();
-			if (StaticMeshAnalyzer::FStaticMeshAnalyzeResults::LoadFrom(*NewResults.Get(), OpenFilenames[0]))
+			TSharedPtr<StaticMeshAnalyzer::FAnalyzeResults> NewResults = MakeShared<StaticMeshAnalyzer::FAnalyzeResults>();
+			if (StaticMeshAnalyzer::FAnalyzeResults::LoadFrom(*NewResults.Get(), OpenFilenames[0]))
 			{
 				AnalyzeResults = NewResults;
 
@@ -484,22 +484,24 @@ void SVisualizeMeshSimilarity::BrowseAssetsInGroup(int32 InGroupIndex)
 
 	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(AssetRegistryConstants::ModuleName);
 
-	const TArray<FSoftObjectPath>& MeshesObjectPaths = CachedSimilarGroupSource[InGroupIndex]->SimilarGroup->StaticMeshes;
+	const TArray<FString>& MeshesObjectPaths = CachedSimilarGroupSource[InGroupIndex]->SimilarGroup->StaticMeshes;
 	TArray<FAssetData> AssetsToBrowse;
-	for (const FSoftObjectPath& ObjectPath : MeshesObjectPaths)
+	for (const FString& ObjectPath : MeshesObjectPaths)
 	{
-		FAssetData AssetData = AssetRegistryModule.Get().GetAssetByObjectPath(ObjectPath);
+		FAssetData AssetData = AssetRegistryModule.Get().GetAssetByObjectPath(FSoftObjectPath(ObjectPath));
 		if (AssetData.IsValid())
 		{
 			AssetsToBrowse.Add(AssetData);
 		}
 		else
 		{
-			FNotificationInfo Info(FText::Format(LOCTEXT("AssetNotFoundForGroup", "No valid assets found for {0}"), FText::FromString(ObjectPath.ToString())));
+			FNotificationInfo Info(FText::Format(LOCTEXT("AssetNotFoundForGroup", "No valid assets found for {0}"), FText::FromString(ObjectPath)));
 			Info.ExpireDuration = 5.0f;
 			FSlateNotificationManager::Get().AddNotification(Info);
 		}
 	}
+
+
 
 	if (AssetsToBrowse.Num() > 0)
 	{

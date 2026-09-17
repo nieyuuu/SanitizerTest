@@ -133,20 +133,20 @@ int32 UMeshSimilarityAnalyzeCommandlet::Main(const FString& InCmdLineParams)
 	}
 	else if (Arguments[MODE] == ANALYZER)
 	{
-		StaticMeshAnalyzer::EStaticMeshAnalyzerType AnalyzerType = StaticMeshAnalyzer::EStaticMeshAnalyzerType::PerVertex;
+		StaticMeshAnalyzer::EType AnalyzerType = StaticMeshAnalyzer::EType::PerVertex;
 		if (Arguments.Contains(ANALYZER_TYPE))
 		{
 			if (Arguments[ANALYZER_TYPE] == TEXT("PerVertex"))
 			{
-				AnalyzerType = StaticMeshAnalyzer::EStaticMeshAnalyzerType::PerVertex;
+				AnalyzerType = StaticMeshAnalyzer::EType::PerVertex;
 			}
 			else if (Arguments[ANALYZER_TYPE] == TEXT("XxHash64"))
 			{
-				AnalyzerType = StaticMeshAnalyzer::EStaticMeshAnalyzerType::XxHash64;
+				AnalyzerType = StaticMeshAnalyzer::EType::XxHash64;
 			}
 			else if (Arguments[ANALYZER_TYPE] == TEXT("XxHash128"))
 			{
-				AnalyzerType = StaticMeshAnalyzer::EStaticMeshAnalyzerType::XxHash128;
+				AnalyzerType = StaticMeshAnalyzer::EType::XxHash128;
 			}
 			else
 			{
@@ -263,7 +263,7 @@ int32 UMeshSimilarityAnalyzeCommandlet::RunPreprocessorMode(int32 InQuantization
 	return 0;
 }
 
-int32 UMeshSimilarityAnalyzeCommandlet::RunAnalyzerMode(StaticMeshAnalyzer::EStaticMeshAnalyzerType InAnalyzerType, const TArray<FString>& InRegistryPaths, const FString& InOutputFile)
+int32 UMeshSimilarityAnalyzeCommandlet::RunAnalyzerMode(StaticMeshAnalyzer::EType InAnalyzerType, const TArray<FString>& InRegistryPaths, const FString& InOutputFile)
 {
 	TArray<TUniquePtr<StaticMeshPreprocessor::FRegistry>> RegistryStorage;
 	for (const FString& RegistryPath : InRegistryPaths)
@@ -282,14 +282,14 @@ int32 UMeshSimilarityAnalyzeCommandlet::RunAnalyzerMode(StaticMeshAnalyzer::ESta
 		return InRegistry.Get();
 		});
 
-	StaticMeshAnalyzer::FStaticMeshAnalyzeResults Results;
+	StaticMeshAnalyzer::FAnalyzeResults Results;
 	if (!StaticMeshAnalyzer::AnalyzeMeshSimilarity(InAnalyzerType, Registries, Results))
 	{
 		UE_LOG(LogMeshSimilarityAnalyzeCommandlet, Error, TEXT("Failed to analyze mesh similarity"));
 		return -1;
 	}
 
-	if (!StaticMeshAnalyzer::FStaticMeshAnalyzeResults::SaveTo(Results, InOutputFile))
+	if (!StaticMeshAnalyzer::FAnalyzeResults::SaveTo(Results, InOutputFile))
 	{
 		UE_LOG(LogMeshSimilarityAnalyzeCommandlet, Error, TEXT("Failed to save final analyze results to [%s]"), *InOutputFile);
 		return -1;

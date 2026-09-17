@@ -6,6 +6,30 @@
 
 namespace StaticMeshPreprocessor
 {
+	FString StatusToString(EStatus InStatus)
+	{
+		switch (InStatus)
+		{
+		case EStatus::Unknown:
+			return TEXT("Unknown");
+		case EStatus::NoError:
+			return TEXT("NoError");
+		case EStatus::InvalidObjectPath:
+			return TEXT("InvalidObjectPath");
+		case EStatus::LOD0SourceModelNotFound:
+			return TEXT("LOD0SourceModelNotFound");
+		case EStatus::MeshDescriptionNotFound:
+			return TEXT("MeshDescriptionNotFound");
+		case EStatus::PositionBufferContainsNaN:
+			return TEXT("PositionBufferContainsNaN");
+		default:
+			check(false);
+			break;
+		}
+
+		return TEXT("");
+	}
+
 	const FStaticMesh* FRegistry::TryFind(const FString& InStaticMeshObjectPath)const
 	{
 		const FStaticMesh* const* pResult = ProcessedStaticMeshes.FindByPredicate([&](const FStaticMesh* InQuantizedStaticMesh) {
@@ -23,19 +47,19 @@ namespace StaticMeshPreprocessor
 		}
 	}
 
-	EStaticMeshStatus FRegistry::GetStatusInThisRegistry(const FString& InStaticMeshObjectPath)const
+	EStatus FRegistry::GetStatusInThisRegistry(const FString& InStaticMeshObjectPath)const
 	{
 		if (ObjectPathToErrorStatus.Contains(InStaticMeshObjectPath))
 		{
-			check(ObjectPathToErrorStatus[InStaticMeshObjectPath] > EStaticMeshStatus::NoError);
+			check(ObjectPathToErrorStatus[InStaticMeshObjectPath] > EStatus::NoError);
 			return ObjectPathToErrorStatus[InStaticMeshObjectPath];
 		}
 		else if (TryFind(InStaticMeshObjectPath) != nullptr)
 		{
-			return EStaticMeshStatus::NoError;
+			return EStatus::NoError;
 		}
 
-		return EStaticMeshStatus::Unknown;
+		return EStatus::Unknown;
 	}
 
 	FStaticMesh* FRegistry::Allocate()const
@@ -164,14 +188,14 @@ namespace StaticMeshPreprocessor
 			//Preprocess LOD0 source model
 			if (!StaticMesh->IsSourceModelValid(0))
 			{
-				Context.ObjectPathToErrorStatus.Add(StaticMeshObjectPath, EStaticMeshStatus::LOD0SourceModelNotFound);
+				Context.ObjectPathToErrorStatus.Add(StaticMeshObjectPath, EStatus::LOD0SourceModelNotFound);
 				return;
 			}
 
 			const FMeshDescription* MeshDescription = StaticMesh->GetMeshDescription(0);
 			if (!MeshDescription)
 			{
-				Context.ObjectPathToErrorStatus.Add(StaticMeshObjectPath, EStaticMeshStatus::MeshDescriptionNotFound);
+				Context.ObjectPathToErrorStatus.Add(StaticMeshObjectPath, EStatus::MeshDescriptionNotFound);
 				return;
 			}
 
@@ -197,7 +221,7 @@ namespace StaticMeshPreprocessor
 					Context.ProcessedStaticMeshes.RemoveSwap(QuantizedStaticMesh);
 					delete QuantizedStaticMesh;
 
-					Context.ObjectPathToErrorStatus.Add(StaticMeshObjectPath, EStaticMeshStatus::PositionBufferContainsNaN);
+					Context.ObjectPathToErrorStatus.Add(StaticMeshObjectPath, EStatus::PositionBufferContainsNaN);
 					return;
 				}
 
@@ -254,17 +278,17 @@ namespace StaticMeshPreprocessor
 
 			for (auto& Registry : InRegistriesToMerge)
 			{
-				TMap<FString, EStaticMeshStatus>& ObjectPathToErrorStatus = Registry.ObjectPathToErrorStatus;
+				TMap<FString, EStatus>& ObjectPathToErrorStatus = Registry.ObjectPathToErrorStatus;
 				TArray<FStaticMesh*>& ProcessedStaticMeshes = Registry.ProcessedStaticMeshes;
 
 				for (const auto& Tuple : ObjectPathToErrorStatus)
 				{
-					if (OutRegistry.GetStatusInThisRegistry(Tuple.Key) != EStaticMeshStatus::Unknown)
+					if (OutRegistry.GetStatusInThisRegistry(Tuple.Key) != EStatus::Unknown)
 						return false;
 				}
 				for (const auto& StaticMesh : ProcessedStaticMeshes)
 				{
-					if (OutRegistry.GetStatusInThisRegistry(StaticMesh->GetStaticMeshObjectPath()) != EStaticMeshStatus::Unknown)
+					if (OutRegistry.GetStatusInThisRegistry(StaticMesh->GetStaticMeshObjectPath()) != EStatus::Unknown)
 						return false;
 				}
 
@@ -296,7 +320,7 @@ namespace StaticMeshPreprocessor
 		check(IsInGameThread());
 
 		TSet<const UStaticMesh*> StaticMeshesToProcess;
-		TMap<FString, EStaticMeshStatus> InvalidObjectPathList;
+		TMap<FString, EStatus> InvalidObjectPathList;
 
 		StaticMeshesToProcess.Reserve(InStaticMeshObjectPaths.Num());
 		for (const FString& ObjectPath : InStaticMeshObjectPaths)
@@ -321,7 +345,7 @@ namespace StaticMeshPreprocessor
 
 			if (StaticMesh == nullptr)
 			{
-				InvalidObjectPathList.Add(ObjectPath, EStaticMeshStatus::InvalidObjectPath);
+				InvalidObjectPathList.Add(ObjectPath, EStatus::InvalidObjectPath);
 			}
 			else
 			{

@@ -120,9 +120,9 @@ void SAnalyzeMeshSimilarity::Construct(const FArguments& InArgs, TSharedPtr<TArr
 
 	ConstructNodeTree(InStaticMeshReportDatas);
 
-	AnalyzerTypeOptions.Add(MakeShared<StaticMeshAnalyzer::EStaticMeshAnalyzerType>(StaticMeshAnalyzer::EStaticMeshAnalyzerType::PerVertex));
-	AnalyzerTypeOptions.Add(MakeShared<StaticMeshAnalyzer::EStaticMeshAnalyzerType>(StaticMeshAnalyzer::EStaticMeshAnalyzerType::XxHash64));
-	AnalyzerTypeOptions.Add(MakeShared<StaticMeshAnalyzer::EStaticMeshAnalyzerType>(StaticMeshAnalyzer::EStaticMeshAnalyzerType::XxHash128));
+	AnalyzerTypeOptions.Add(MakeShared<StaticMeshAnalyzer::EType>(StaticMeshAnalyzer::EType::PerVertex));
+	AnalyzerTypeOptions.Add(MakeShared<StaticMeshAnalyzer::EType>(StaticMeshAnalyzer::EType::XxHash64));
+	AnalyzerTypeOptions.Add(MakeShared<StaticMeshAnalyzer::EType>(StaticMeshAnalyzer::EType::XxHash128));
 
 	SelectedAnalyzerTypeOption = AnalyzerTypeOptions[0];
 
@@ -186,18 +186,18 @@ void SAnalyzeMeshSimilarity::Construct(const FArguments& InArgs, TSharedPtr<TArr
 										.AutoWidth()
 										.VAlign(VAlign_Center)
 										[
-											SNew(SComboBox<TSharedPtr<StaticMeshAnalyzer::EStaticMeshAnalyzerType>>)
+											SNew(SComboBox<TSharedPtr<StaticMeshAnalyzer::EType>>)
 												.OptionsSource(&AnalyzerTypeOptions)
-												.OnSelectionChanged_Lambda([this](TSharedPtr<StaticMeshAnalyzer::EStaticMeshAnalyzerType> InNewSelection, ESelectInfo::Type) {
+												.OnSelectionChanged_Lambda([this](TSharedPtr<StaticMeshAnalyzer::EType> InNewSelection, ESelectInfo::Type) {
 												SelectedAnalyzerTypeOption = InNewSelection;
 													})
-												.OnGenerateWidget_Lambda([](TSharedPtr<StaticMeshAnalyzer::EStaticMeshAnalyzerType> InOption) {
-												return SNew(STextBlock).Text(UEnum::GetDisplayValueAsText(*InOption));
+												.OnGenerateWidget_Lambda([](TSharedPtr<StaticMeshAnalyzer::EType> InOption) {
+												return SNew(STextBlock).Text(FText::FromString(StaticMeshAnalyzer::TypeToString(*InOption)));
 													})
 												.InitiallySelectedItem(SelectedAnalyzerTypeOption)
 												[
 													SNew(STextBlock).Text_Lambda([this]() {
-														return UEnum::GetDisplayValueAsText(*SelectedAnalyzerTypeOption);
+														return FText::FromString(StaticMeshAnalyzer::TypeToString(*SelectedAnalyzerTypeOption));
 														})
 												]
 										]
@@ -476,7 +476,7 @@ FReply SAnalyzeMeshSimilarity::OnOkClicked()
 
 	//Analyze
 	SlowTask.EnterProgressFrame(1, LOCTEXT("AnalyzeMeshSimilarity_AnalyzeMeshSimilarity", "Analyzing Static Mesh Similarity..."));
-	TSharedPtr<StaticMeshAnalyzer::FStaticMeshAnalyzeResults> Results = MakeShared<StaticMeshAnalyzer::FStaticMeshAnalyzeResults>();
+	TSharedPtr<StaticMeshAnalyzer::FAnalyzeResults> Results = MakeShared<StaticMeshAnalyzer::FAnalyzeResults>();
 	if (!StaticMeshAnalyzer::AnalyzeMeshSimilarity(*SelectedAnalyzerTypeOption, { Registry.Get() }, *Results))
 	{
 		FNotificationInfo Info(LOCTEXT("FailedToAnalyze", "Failed to analyze mesh similarity."));
@@ -487,7 +487,7 @@ FReply SAnalyzeMeshSimilarity::OnOkClicked()
 	{
 		for (const FString& ObjectPath : FailedToLoadObjectPaths)
 		{
-			Results.Get()->ObjectPathToErrorStatus.Add(ObjectPath, StaticMeshPreprocessor::EStaticMeshStatus::InvalidObjectPath);
+			Results.Get()->ObjectPathToErrorStatus.Add(ObjectPath, StaticMeshPreprocessor::EStatus::InvalidObjectPath);
 		}
 		SVisualizeMeshSimilarity::OpenVisualizeMeshSimilarityDialog(Results);
 	}
