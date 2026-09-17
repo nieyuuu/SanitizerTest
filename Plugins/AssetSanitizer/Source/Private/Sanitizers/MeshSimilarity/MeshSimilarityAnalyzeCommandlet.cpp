@@ -9,11 +9,10 @@ DEFINE_LOG_CATEGORY(LogMeshSimilarityAnalyzeCommandlet);
 
 #define MODE TEXT("Mode")
 
-#define BALANCER           TEXT("Balancer")
-#define NUM_OF_BATCHES     TEXT("NumOfBatches")
-#define DIRS_TO_PROCESS    TEXT("DirsToProcess")
-#define OUTPUT_DIR         TEXT("OutputDir")
-#define CONSIDER_DISK_SIZE TEXT("ConsiderDiskSize")
+#define BALANCER		TEXT("Balancer")
+#define NUM_OF_BATCHES	TEXT("NumOfBatches")
+#define DIRS_TO_PROCESS	TEXT("DirsToProcess")
+#define OUTPUT_DIR		TEXT("OutputDir")
 
 #define PREPROCESSOR          TEXT("Preprocessor")
 #define QUANTIZATION_EXPONENT TEXT("QuantizationExponent")
@@ -98,13 +97,7 @@ int32 UMeshSimilarityAnalyzeCommandlet::Main(const FString& InCmdLineParams)
 			return -1;
 		}
 
-		bool bConsiderDiskSize = false;
-		if (Switches.Contains(CONSIDER_DISK_SIZE))
-		{
-			bConsiderDiskSize = true;
-		}
-
-		return RunBalancerMode(NumOfBatches, bConsiderDiskSize, DirsToProcess, OutputDir);
+		return RunBalancerMode(NumOfBatches, DirsToProcess, OutputDir);
 	}
 	else if (Arguments[MODE] == PREPROCESSOR)
 	{
@@ -180,7 +173,7 @@ int32 UMeshSimilarityAnalyzeCommandlet::Main(const FString& InCmdLineParams)
 			return -1;
 		}
 
-		const FString AnalyzeOutput = RegistryStoragePath + FString(TEXT("MeshSimilarity.json"));
+		const FString AnalyzeOutput = RegistryStoragePath + FString(TEXT("MeshSimilarity.bin"));
 
 		return RunAnalyzerMode(AnalyzerType, RegistryPaths, AnalyzeOutput);
 	}
@@ -193,7 +186,7 @@ int32 UMeshSimilarityAnalyzeCommandlet::Main(const FString& InCmdLineParams)
 	return 0;
 }
 
-int32 UMeshSimilarityAnalyzeCommandlet::RunBalancerMode(int32 InNumOfBatches, bool InConsiderDiskSize, const TArray<FString>& InDirectoriesToProcess, const FString& InOutputDir)
+int32 UMeshSimilarityAnalyzeCommandlet::RunBalancerMode(int32 InNumOfBatches, const TArray<FString>& InDirectoriesToProcess, const FString& InOutputDir)
 {
 	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(AssetRegistryConstants::ModuleName);
 	IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
@@ -209,14 +202,7 @@ int32 UMeshSimilarityAnalyzeCommandlet::RunBalancerMode(int32 InNumOfBatches, bo
 	AssetRegistry.GetAssets(Filter, StaticMeshAssetDatas);
 
 	TArray<TArray<FString>> BalancedBatches;
-	if (InConsiderDiskSize)
-	{
-		BalancedBatches = FLoadBalancer::BalanceAssets(StaticMeshAssetDatas, InNumOfBatches, FDefaultPayloadCalculator<true, true>{});
-	}
-	else
-	{
-		BalancedBatches = FLoadBalancer::BalanceAssets(StaticMeshAssetDatas, InNumOfBatches, FDefaultPayloadCalculator<false, true>{});
-	}
+	BalancedBatches = FLoadBalancer::BalanceAssets(StaticMeshAssetDatas, InNumOfBatches, FDefaultPayloadCalculator<true, true>{});
 
 	for (int i = 0; i < BalancedBatches.Num(); ++i)
 	{

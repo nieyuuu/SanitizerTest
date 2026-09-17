@@ -34,7 +34,7 @@ namespace StaticMeshPreprocessor
 	{
 		const FStaticMesh* const* pResult = ProcessedStaticMeshes.FindByPredicate([&](const FStaticMesh* InQuantizedStaticMesh) {
 			return InQuantizedStaticMesh->StaticMeshObjectPath == InStaticMeshObjectPath;
-			});
+		});
 
 		if (pResult != nullptr)
 		{
@@ -144,13 +144,10 @@ namespace StaticMeshPreprocessor
 			return false;
 		}
 
-		InRegistry.Get()->bFromDiskFile = true;
-		InRegistry.Get()->FileName = InLoadFileName;
-
 		return true;
 	}
 
-	TUniquePtr<FRegistry> FRegistry::PreprocessStaticMeshes(const TSet<const UStaticMesh*>& InStaticMeshesToProcess, FSettings InSettings)
+	TUniquePtr<FRegistry> FRegistry::PreprocessStaticMeshes(const TSet<const UStaticMesh*>& InStaticMeshesToProcess, const FSettings& InSettings)
 	{
 		check(IsInGameThread());
 
@@ -315,7 +312,7 @@ namespace StaticMeshPreprocessor
 		return MoveTemp(OutRegistry);
 	}
 
-	TUniquePtr<FRegistry> FRegistry::PreprocessStaticMeshes(const TSet<FString>& InStaticMeshObjectPaths, FSettings InSettings)
+	TUniquePtr<FRegistry> FRegistry::PreprocessStaticMeshes(const TSet<FString>& InStaticMeshObjectPaths, const FSettings& InSettings)
 	{
 		check(IsInGameThread());
 

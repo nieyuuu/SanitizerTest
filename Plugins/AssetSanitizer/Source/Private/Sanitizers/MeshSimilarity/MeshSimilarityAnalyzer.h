@@ -112,8 +112,8 @@ namespace StaticMeshAnalyzer
 			inline bool operator<(const TKey<FHashType>& InOther) const
 			{
 				return Exponent != InOther.Exponent ? Exponent < InOther.Exponent :
-					NumOfVertices != InOther.NumOfVertices ? NumOfVertices < InOther.NumOfVertices :
-					Hash < InOther.Hash;
+					   NumOfVertices != InOther.NumOfVertices ? NumOfVertices < InOther.NumOfVertices :
+					   Hash < InOther.Hash;
 			}
 		};
 

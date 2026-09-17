@@ -21,7 +21,7 @@ public:
 	virtual int32 Main(const FString& InCmdLineParams)override;
 
 private:
-	int32 RunBalancerMode(int32 InNumOfBatches, bool InConsiderDiskSize, const TArray<FString>& InDirectoriesToProcess, const FString& InOutputDir);
+	int32 RunBalancerMode(int32 InNumOfBatches, const TArray<FString>& InDirectoriesToProcess, const FString& InOutputDir);
 	int32 RunPreprocessorMode(int32 InQuantizationExponent, const FString& InInputFile, const FString& InOutputFile);
 	int32 RunAnalyzerMode(StaticMeshAnalyzer::EType InAnalyzerType, const TArray<FString>& InRegistryPaths, const FString& InOutputFile);
 };

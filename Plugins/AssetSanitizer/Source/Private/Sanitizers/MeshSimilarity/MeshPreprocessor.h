@@ -6,9 +6,7 @@
 #include "Math/MathFwd.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 
-constexpr int32 MIN_EXPONENT = -2;
-constexpr int32 MAX_EXPONENT = 7;
-constexpr int32 DEFAULT_EXPONENT = 0;
+constexpr int32 MIN_EXPONENT = -3, MAX_EXPONENT = 8, DEFAULT_EXPONENT = 0;
 
 namespace StaticMeshPreprocessor
 {
@@ -66,8 +64,8 @@ namespace StaticMeshPreprocessor
 		friend FArchive& operator<<(FArchive& InAr, FStaticMesh& InQuantizedStaticMesh)
 		{
 			InAr << InQuantizedStaticMesh.QuantizationExponent;
-			InAr << InQuantizedStaticMesh.StaticMeshObjectPath;
 			InAr << InQuantizedStaticMesh.BoundingBox;
+			InAr << InQuantizedStaticMesh.StaticMeshObjectPath;
 			InAr << InQuantizedStaticMesh.QuantizedPositionBuffer;
 
 			return InAr;
@@ -78,9 +76,9 @@ namespace StaticMeshPreprocessor
 		FStaticMesh() = default;
 
 		int32 QuantizationExponent = DEFAULT_EXPONENT;
-		FString StaticMeshObjectPath;
-		FBox BoundingBox;
-		TArray<FInt64Vector3> QuantizedPositionBuffer;
+		FBox BoundingBox = {};
+		FString StaticMeshObjectPath = {};
+		TArray<FInt64Vector3> QuantizedPositionBuffer = {};
 	};
 
 	//Registry which holds the preprocess results.
@@ -89,6 +87,7 @@ namespace StaticMeshPreprocessor
 	{
 	public:
 		FRegistry(int32 InQuantizationExponent = DEFAULT_EXPONENT) :QuantizationExponent(InQuantizationExponent) {}
+		
 		virtual ~FRegistry()
 		{
 			for (int i = 0; i < ProcessedStaticMeshes.Num(); ++i)
@@ -109,14 +108,10 @@ namespace StaticMeshPreprocessor
 		FRegistry(FRegistry&& InOther)
 		{
 			QuantizationExponent = InOther.QuantizationExponent;
-			bFromDiskFile = InOther.bFromDiskFile;
-			FileName = MoveTemp(InOther.FileName);
 			ObjectPathToErrorStatus = MoveTemp(InOther.ObjectPathToErrorStatus);
 			ProcessedStaticMeshes = MoveTemp(InOther.ProcessedStaticMeshes);
 
 			InOther.QuantizationExponent = DEFAULT_EXPONENT;
-			InOther.bFromDiskFile = false;
-			InOther.FileName.Empty();
 			InOther.ObjectPathToErrorStatus.Empty();
 			InOther.ProcessedStaticMeshes.Empty();
 		}
@@ -136,14 +131,10 @@ namespace StaticMeshPreprocessor
 				ProcessedStaticMeshes.Empty(InOther.ProcessedStaticMeshes.Num());
 
 				QuantizationExponent = InOther.QuantizationExponent;
-				bFromDiskFile = InOther.bFromDiskFile;
-				FileName = MoveTemp(InOther.FileName);
 				ObjectPathToErrorStatus = MoveTemp(InOther.ObjectPathToErrorStatus);
 				ProcessedStaticMeshes = MoveTemp(InOther.ProcessedStaticMeshes);
 
 				InOther.QuantizationExponent = DEFAULT_EXPONENT;
-				InOther.bFromDiskFile = false;
-				InOther.FileName.Empty();
 				InOther.ObjectPathToErrorStatus.Empty();
 				InOther.ProcessedStaticMeshes.Empty();
 			}
@@ -156,42 +147,14 @@ namespace StaticMeshPreprocessor
 			return QuantizationExponent;
 		}
 
-		//Try to find the quantized static mesh pointer in this registry.
-		//Returns nullptr if not found:
-		//1.Static mesh is not in this registry
-		//2.Static mesh is in this registry but error occurred when preprocessing it
-		const FStaticMesh* TryFind(const FString& InStaticMeshObjectPath)const;
-
-		inline const TArray<FStaticMesh*>& GetProcessedStaticMeshes()const
-		{
-			return ProcessedStaticMeshes;
-		}
-
-		//Get the status of a static mesh in this registry
-		EStatus GetStatusInThisRegistry(const FString& InStaticMeshObjectPath)const;
-
 		inline const TMap<FString, EStatus>& GetObjectPathToErrorStatus()const
 		{
 			return ObjectPathToErrorStatus;
 		}
 
-		inline bool IsFromDiskFile()const
+		inline const TArray<FStaticMesh*>& GetProcessedStaticMeshes()const
 		{
-			return bFromDiskFile;
-		}
-
-		inline FName GetFileName()const
-		{
-			if (bFromDiskFile)
-			{
-				check(FileName.EndsWith(TEXT(".bin")));
-				return FName(*FileName);
-			}
-			else
-			{
-				check(FileName.Len() == 0);
-				return NAME_None;
-			}
+			return ProcessedStaticMeshes;
 		}
 
 		//Save to disk eg. [D:\MyWorkspace\UnrealProjects\SanitizerTest\Saved\Test.bin]
@@ -200,12 +163,9 @@ namespace StaticMeshPreprocessor
 		//Load from disk eg. [D:\MyWorkspace\UnrealProjects\SanitizerTest\Saved\Test.bin]
 		static bool LoadFrom(TUniquePtr<FRegistry>& InRegistry, const FString& InLoadFileName);
 
-		static TUniquePtr<FRegistry> PreprocessStaticMeshes(const TSet<const UStaticMesh*>& InStaticMeshesToProcess, FSettings InSettings);
+		static TUniquePtr<FRegistry> PreprocessStaticMeshes(const TSet<const UStaticMesh*>& InStaticMeshesToProcess, const FSettings& InSettings);
 
-		//FString is default case insensitive but this might be ok because there cant be two assets SM_Asset/SM_asset under same folder
-		//And there cant be two sub-folsers Folder/folder under same folder
-		//TSet<FString, FLocKeySetFuncs, FDefaultSetAllocator> will handle case sensitive of FString
-		static TUniquePtr<FRegistry> PreprocessStaticMeshes(const TSet<FString>& InStaticMeshObjectPaths, FSettings InSettings);
+		static TUniquePtr<FRegistry> PreprocessStaticMeshes(const TSet<FString>& InStaticMeshObjectPaths, const FSettings& InSettings);
 
 		friend FArchive& operator<<(FArchive& InAr, FRegistry& InRegistry)
 		{
@@ -232,14 +192,6 @@ namespace StaticMeshPreprocessor
 						InRegistry.TryFind(QuantizedStaticMesh->GetStaticMeshObjectPath()) == nullptr,
 						TEXT("The archive may be corrupted. Consider remove the corrupted archive and retry preprocess static meshes."));
 					InRegistry.ProcessedStaticMeshes.Add(QuantizedStaticMesh);
-
-					//RTTI is disabled
-					/*FArchiveFileReaderGeneric* FileReader = dynamic_cast<FArchiveFileReaderGeneric*>(&InAr);
-					if (FileReader)
-					{
-						InRegistry.bFromDiskFile = true;
-						InRegistry.FileName = FileReader->GetArchiveName();
-					}*/
 				}
 			}
 			else
@@ -258,15 +210,19 @@ namespace StaticMeshPreprocessor
 
 	private:
 		int32 QuantizationExponent = DEFAULT_EXPONENT;
-		bool bFromDiskFile = false;
-		FString FileName;
-		//FString is default case insensitive but this might be ok because there cant be two assets SM_Asset/SM_asset under same folder
-		//And there cant be two sub-folsers Folder/folder under same folder
-		//TMap<FString, EStatus, FDefaultSetAllocator, FLocKeyMapFuncs<EStatus>> will handle case sensitive of FString
-		TMap<FString, EStatus> ObjectPathToErrorStatus;
-		TArray<FStaticMesh*> ProcessedStaticMeshes;
+		TMap<FString, EStatus> ObjectPathToErrorStatus = {};
+		TArray<FStaticMesh*> ProcessedStaticMeshes = {};
 
-		//Allocate an instance of FStaticMesh and set its QuantizationExponent
+		//Try to find the quantized static mesh pointer in this registry.
+		//Returns nullptr if not found:
+		//1.Static mesh is not in this registry
+		//2.Static mesh is in this registry but error occurred when preprocessing it
+		const FStaticMesh* TryFind(const FString& InStaticMeshObjectPath)const;
+
+		//Get the status of a static mesh in this registry
+		EStatus GetStatusInThisRegistry(const FString& InStaticMeshObjectPath)const;
+
+		//Allocate an instance of FStaticMesh
 		[[nodiscard]] FStaticMesh* Allocate()const;
 
 		//Allocate an instance of FStaticMesh and add it to ProcessedStaticMeshes

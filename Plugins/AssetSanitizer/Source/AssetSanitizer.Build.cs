@@ -6,14 +6,12 @@ public class AssetSanitizer : ModuleRules
     {
         PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
-        bAllowUETypesInNamespaces = true;
-
         PublicIncludePaths.AddRange(new string[] { });
         PrivateIncludePaths.AddRange(new string[] { });
 
         PublicDependencyModuleNames.AddRange(new string[] { "Core" });
         PrivateDependencyModuleNames.AddRange(new string[] { "CoreUObject", "Engine", "Slate", "SlateCore", "AssetRegistry",
-            "MeshDescription", "StaticMeshDescription","DeveloperSettings", "Json", "JsonUtilities", "EditorStyle",
+            "MeshDescription", "StaticMeshDescription","DeveloperSettings", "EditorStyle",
             "ContentBrowser", "InputCore", "DesktopPlatform", "UnrealEd", "ToolMenus", "AssetTools" });
 
         DynamicallyLoadedModuleNames.AddRange(new string[] { });

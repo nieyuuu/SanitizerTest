@@ -177,9 +177,9 @@ namespace StaticMeshAnalyzer
 		if (UniqueExponentSet.Num() > 1)
 		{
 			UE_LOG(LogAssetSanitizer, Error, TEXT("Detected %d different quantization exponents in %d registries. It is expected all registries have same quantization exponent."), UniqueExponentSet.Num(), InRegistries.Num());
-			for (const StaticMeshPreprocessor::FRegistry* Registry : InRegistries)
+			for (int i = 0; i < InRegistries.Num(); ++i)
 			{
-				UE_LOG(LogAssetSanitizer, Error, TEXT("Registry file name: [%s], exponent: [%d]."), *(Registry->GetFileName().ToString()), Registry->GetQuantizationExponent());
+				UE_LOG(LogAssetSanitizer, Error, TEXT("Registry [%d], exponent: [%d]."), i, InRegistries[i]->GetQuantizationExponent());
 			}
 			return false;
 		}
